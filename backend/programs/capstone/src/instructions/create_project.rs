@@ -10,9 +10,9 @@ pub struct InitializeProject<'info> {
 
     #[account(
         init,
+        payer = project_authority,
         space = Project::DISCRIMINATOR.len() +  Project::INIT_SPACE,
         seeds= [PROJECT_SEED, project_name.as_bytes(), project_authority.key().as_ref()],
-        payer = project_authority,
         bump
     )]
     pub project: Box<Account<'info, Project>>,

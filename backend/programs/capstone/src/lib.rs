@@ -12,10 +12,15 @@ declare_id!("3fk3PSD454iVm83yGsWtMo3xrwwV8MAUtSMhYPvimzTo");
 pub mod capstone {
     use super::*;
 
-    pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
-        msg!("Greetings from: {:?}", ctx.program_id);
-        Ok(())
+    pub fn initialize_project(
+        ctx: Context<InitializeProject>,
+        project_name: String,
+        target_amount: u64,
+        deadline: i64,
+    ) -> Result<()> {
+        InitializeProject::initialize_project(ctx, project_name, target_amount, deadline)
     }
+    
 }
 
 #[derive(Accounts)]
