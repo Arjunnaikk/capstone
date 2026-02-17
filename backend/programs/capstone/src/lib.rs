@@ -4,7 +4,7 @@ mod instructions;
 mod state;
 mod errors;
 
-use instructions::*; 
+use instructions::*;
 
 declare_id!("3fk3PSD454iVm83yGsWtMo3xrwwV8MAUtSMhYPvimzTo");
 
@@ -21,7 +21,8 @@ pub mod capstone {
         InitializeProject::initialize_project(ctx, project_name, target_amount, deadline)
     }
     
-}
+    pub fn contribute_funds(ctx: Context<ContributeFunds>, amount: u64) -> Result<()> {
+        ContributeFunds::contribute_funds(ctx, amount)
+    }
 
-#[derive(Accounts)]
-pub struct Initialize {}
+}

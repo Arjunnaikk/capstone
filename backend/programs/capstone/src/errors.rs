@@ -14,6 +14,9 @@ pub enum Error {
     #[msg("Project is not accepting funds")]
     ProjectNotFunding,
 
+    #[msg("Project funding deadline has passed")]
+    ProjectExpired,
+
     #[msg("Numerical overflow")]
     Overflow,
 }
