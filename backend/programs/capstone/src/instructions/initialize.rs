@@ -4,7 +4,7 @@ use anchor_spl::{
     token_interface::{Mint, TokenAccount, TokenInterface},
 };
 
-use crate::state::Vault;
+use crate::state::{VAULT_SEED, Vault};
 
 #[derive(Accounts)]
 pub struct Initialize<'info> {
@@ -15,7 +15,7 @@ pub struct Initialize<'info> {
         init,
         payer = admin,
         space = Vault::DISCRIMINATOR.len() + Vault::INIT_SPACE,
-        seeds = [b"VAULT"],
+        seeds = [VAULT_SEED],
         bump
     )]
     pub vault: Account<'info, Vault>,
