@@ -1,10 +1,9 @@
 use anchor_lang::prelude::*;
-
 use crate::{errors::Error, state::project::*};
 
 #[derive(Accounts)]
 #[instruction(project_name: String)]
-pub struct InitializeProject<'info> {
+pub struct CreateProject<'info> {
     #[account(mut)]
     pub project_authority: Signer<'info>,
 
@@ -20,25 +19,24 @@ pub struct InitializeProject<'info> {
     pub system_program: Program<'info, System>,
 }
 
-impl<'info> InitializeProject<'info> {
-    pub fn initialize_project(
-        ctx: Context<InitializeProject>,
+impl<'info> CreateProject<'info> {
+    pub fn create_project(
+        &mut self,
         project_name: String,
         target_amount: u64,
         deadline: i64,
     ) -> Result<()> {
-        let project = &mut ctx.accounts.project;
 
         require!(target_amount > 0, Error::ZeroAmount);
 
-        project.set_inner(Project {
-            project_authority: ctx.accounts.project_authority.key(),
+        self.project.set_inner(Project {
+            project_authority: self.project_authority.key(),
             project_name,
             target_amount: target_amount,
             collected_amount: 0,
             project_state: ProjectState::Funding,
             project_deadline: deadline,
-            bump: ctx.bumps.project,
+            bump: self.project.bump,
         });
 
         Ok(())

@@ -4,5 +4,5 @@ pub use project::*;
 pub mod contribution;
 pub use contribution::*;
 
-pub mod config;
-pub use config::*; 
+pub mod vault; 
+pub use vault::*; 

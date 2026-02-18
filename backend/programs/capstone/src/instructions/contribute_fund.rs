@@ -1,0 +1,84 @@
+use crate::{errors::Error, state::*};
+use anchor_lang::{
+    prelude::*,
+    system_program::{transfer, Transfer},
+};
+use anchor_spl::{
+    associated_token::AssociatedToken,
+    token_interface::{
+        mint_to_checked, Mint, MintToChecked,
+        TokenAccount, TokenInterface,
+    },
+};
+
+#[derive(Accounts)]
+#[instruction(amount: u64)]
+pub struct ContributeFund<'info> {
+    #[account(mut)]
+    pub funder: Signer<'info>,
+
+    #[account(
+        mut,
+        seeds = [VAULT_SEED],
+        bump = vault.bump
+    )]
+    pub vault: Account<'info, Vault>,
+
+    #[account(
+        init_if_needed,
+        payer = funder,
+        associated_token::mint = vault_mint,
+        associated_token::authority = funder,
+        associated_token::token_program = token_program
+    )]
+    pub funder_receipt_ata: InterfaceAccount<'info, TokenAccount>,
+
+    #[account(
+        mut,
+        constraint = vault_mint.mint_authority == 
+            anchor_lang::solana_program::program_option::COption::Some(vault.key())
+    )]
+    pub vault_mint: InterfaceAccount<'info, Mint>,
+
+    pub system_program: Program<'info, System>,
+    pub token_program: Interface<'info, TokenInterface>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
+}
+
+impl<'info> ContributeFund<'info> {
+    pub fn contribute_fund(&mut self, amount: u64) -> Result<()> {
+        require!(amount > 0, Error::ZeroAmount);
+
+        transfer(
+            CpiContext::new(
+                self.system_program.to_account_info(),
+                Transfer {
+                    from: self.funder.to_account_info(),
+                    to: self.vault.to_account_info(),
+                },
+            ),
+            amount,
+        )?;
+
+        let signer_seeds: &[&[&[u8]]] = &[&[
+            VAULT_SEED,
+            &[self.vault.bump],
+        ]];
+
+        mint_to_checked(
+            CpiContext::new_with_signer(
+                self.token_program.to_account_info(),
+                MintToChecked {
+                    mint: self.vault_mint.to_account_info(),
+                    to: self.funder_receipt_ata.to_account_info(),
+                    authority: self.vault.to_account_info(),
+                },
+                signer_seeds,
+            ),
+            amount,
+            self.vault_mint.decimals,
+        )?;
+
+        Ok(())
+    }
+}
