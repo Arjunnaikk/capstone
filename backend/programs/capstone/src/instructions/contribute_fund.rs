@@ -12,7 +12,6 @@ use anchor_spl::{
 };
 
 #[derive(Accounts)]
-#[instruction(amount: u64)]
 pub struct ContributeFund<'info> {
     #[account(mut)]
     pub funder: Signer<'info>,
@@ -23,6 +22,13 @@ pub struct ContributeFund<'info> {
         bump = vault.bump
     )]
     pub vault: Account<'info, Vault>,
+
+    #[account(
+        mut,
+        seeds = [PROJECT_SEED,project.project_name.as_bytes(), project.project_authority.as_ref()],
+        bump = project.bump
+    )]
+    pub project: Account<'info, Project>,
 
     #[account(
         init_if_needed,
@@ -48,6 +54,17 @@ pub struct ContributeFund<'info> {
 impl<'info> ContributeFund<'info> {
     pub fn contribute_fund(&mut self, amount: u64) -> Result<()> {
         require!(amount > 0, Error::ZeroAmount);
+
+        require!(
+            self.project.project_state == ProjectState::Funding,
+            Error::ProjectNotFunding
+        );
+
+        let clock = Clock::get()?;
+        require!(
+            clock.unix_timestamp <= self.project.project_deadline,
+            Error::ProjectNotFunding
+        );
 
         transfer(
             CpiContext::new(
@@ -78,6 +95,12 @@ impl<'info> ContributeFund<'info> {
             amount,
             self.vault_mint.decimals,
         )?;
+
+        self.project.collected_amount = self.project.collected_amount.checked_add(amount).unwrap();
+
+        if self.project.collected_amount >= self.project.target_amount {
+            self.project.project_state = ProjectState::Development;
+        }
 
         Ok(())
     }
