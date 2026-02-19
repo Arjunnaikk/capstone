@@ -4,5 +4,8 @@ pub use project::*;
 pub mod contribution;
 pub use contribution::*;
 
+pub mod milestone;
+pub use milestone::*; 
+
 pub mod vault; 
 pub use vault::*; 

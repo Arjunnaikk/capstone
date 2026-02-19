@@ -6,3 +6,6 @@ pub use contribute_fund::*;
 
 pub mod initialize; 
 pub use initialize::*; 
+
+pub mod create_milestone;
+pub use create_milestone::*;
