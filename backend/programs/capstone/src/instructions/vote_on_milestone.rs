@@ -68,6 +68,14 @@ impl<'info> VoteMilestone<'info> {
             bump: self.vote.bump, 
         });
 
+        if decision {
+            self.milestone.vote_for = self.milestone.vote_for.checked_add(1).unwrap();
+        } else {
+            self.milestone.vote_against = self.milestone.vote_against.checked_add(1).unwrap();
+        }
+        
+        self.milestone.vote_count = self.milestone.vote_count.checked_add(1).unwrap();
+
         Ok(())
 
     }
