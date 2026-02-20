@@ -97,6 +97,7 @@ impl<'info> ContributeFund<'info> {
         )?;
 
         self.project.collected_amount = self.project.collected_amount.checked_add(amount).unwrap();
+        self.project.funder_count = self.project.funder_count.checked_add(1).unwrap();
 
         if self.project.collected_amount >= self.project.target_amount {
             self.project.project_state = ProjectState::Development;

@@ -9,3 +9,6 @@ pub use initialize::*;
 
 pub mod create_milestone;
 pub use create_milestone::*;
+
+pub mod vote_on_milestone;
+pub use vote_on_milestone::*; 

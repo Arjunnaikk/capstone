@@ -9,3 +9,6 @@ pub use milestone::*;
 
 pub mod vault; 
 pub use vault::*; 
+
+pub mod vote;
+pub use vote::*; 

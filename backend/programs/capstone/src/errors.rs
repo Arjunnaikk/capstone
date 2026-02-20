@@ -19,4 +19,7 @@ pub enum Error {
 
     #[msg("Numerical overflow")]
     Overflow,
+
+    #[msg("Numerical overflow")]
+    NotVotingStage,
 }
