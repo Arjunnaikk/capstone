@@ -12,3 +12,6 @@ pub use vault::*;
 
 pub mod vote;
 pub use vote::*; 
+
+pub mod user;
+pub use user::*;
