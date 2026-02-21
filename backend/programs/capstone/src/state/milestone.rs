@@ -13,7 +13,8 @@ pub struct Milestone{
     pub milestone_deadline: i64, 
     pub vote_against: u8,
     pub vote_for: u8,
-    pub vote_count: u32, 
+    pub vote_against_weight: u64, 
+    pub vote_for_weight: u64, 
     pub bump: u8
 }
 

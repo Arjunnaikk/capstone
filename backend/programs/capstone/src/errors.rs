@@ -5,10 +5,10 @@ pub enum Error {
     #[msg("Amount cannot be zero")]
     ZeroAmount,
 
-     #[msg("Invalid milestone type provided.")]
+    #[msg("Invalid milestone type provided.")]
     InvalidMilestoneType,
 
-     #[msg("Fund amount cannot be zero.")]
+    #[msg("Fund amount cannot be zero.")]
     ZeroFund,
 
     #[msg("Project is not accepting funds")]

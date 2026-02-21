@@ -31,7 +31,7 @@ pub struct VoteMilestone<'info> {
     #[account(
         init,
         space = Vote::DISCRIMINATOR.len() +  Vote::INIT_SPACE,
-        seeds= [VOTE_SEED, project.project_name.as_ref(), &[milestone.milestone_type as u8]],
+        seeds= [VOTE_SEED, project.project_name.as_ref(), &[milestone.milestone_type as u8], voter.key().as_ref()],
         payer = voter,
         bump
     )]
@@ -70,11 +70,12 @@ impl<'info> VoteMilestone<'info> {
 
         if decision {
             self.milestone.vote_for = self.milestone.vote_for.checked_add(1).unwrap();
+            self.milestone.vote_for_weight = self.milestone.vote_for_weight.checked_add(voting_weight).unwrap();
+            
         } else {
             self.milestone.vote_against = self.milestone.vote_against.checked_add(1).unwrap();
+            self.milestone.vote_against_weight = self.milestone.vote_against_weight.checked_add(voting_weight).unwrap();
         }
-        
-        self.milestone.vote_count = self.milestone.vote_count.checked_add(1).unwrap();
 
         Ok(())
 

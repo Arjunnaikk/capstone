@@ -43,7 +43,8 @@ impl<'info> CreateMilestone<'info> {
             milestone_deadline: deadline , 
             vote_against: 0,
             vote_for: 0,
-            vote_count: 0, 
+            vote_against_weight: 0,
+            vote_for_weight: 0, 
             bump: self.milestone.bump,
         });
 

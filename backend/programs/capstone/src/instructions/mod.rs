@@ -12,3 +12,6 @@ pub use create_milestone::*;
 
 pub mod vote_on_milestone;
 pub use vote_on_milestone::*; 
+
+pub mod approve_milestone;
+pub use approve_milestone::*; 

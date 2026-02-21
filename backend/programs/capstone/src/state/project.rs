@@ -11,6 +11,7 @@ pub struct Project {
     #[max_len(32)]
     pub target_amount: u64,
     pub collected_amount: u64,
+    pub withdrawn_amount: u64,
     pub project_state: ProjectState,
     pub milestones_completed: u8, 
     pub project_deadline: i64, 

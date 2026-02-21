@@ -34,6 +34,7 @@ impl<'info> CreateProject<'info> {
             project_name,
             target_amount: target_amount,
             collected_amount: 0,
+            withdrawn_amount:0,
             project_state: ProjectState::Funding,
             milestones_completed: 0, 
             project_deadline: deadline,
