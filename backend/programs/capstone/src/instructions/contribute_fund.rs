@@ -31,6 +31,13 @@ pub struct ContributeFund<'info> {
     pub project: Account<'info, Project>,
 
     #[account(
+        mut,
+        seeds = [USER_SEED, funder.key().as_ref()],
+        bump = user.bump
+    )]
+    pub user: Account<'info, User>,
+
+    #[account(
         init_if_needed,
         payer = funder,
         associated_token::mint = vault_mint,
@@ -102,6 +109,9 @@ impl<'info> ContributeFund<'info> {
         if self.project.collected_amount >= self.project.target_amount {
             self.project.project_state = ProjectState::Development;
         }
+
+        self.user.donated_amount = self.user.donated_amount.checked_add(amount).unwrap();
+        self.user.last_active_time = clock.unix_timestamp;
 
         Ok(())
     }

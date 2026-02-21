@@ -56,6 +56,7 @@ impl<'info> CreateMilestone<'info> {
         });
 
         self.user.last_active_time = clock.unix_timestamp;
+        self.user.milestones_posted = self.user.milestones_posted.checked_add(1).unwrap();
 
         Ok(())
     }

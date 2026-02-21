@@ -8,6 +8,7 @@ pub struct User {
     pub donated_amount: u64,
     pub total_votes: u64,
     pub projects_posted: u64,
+    pub milestones_posted: u64,
     pub milestones_cleared: u64, 
     pub projects_succeed: u64, 
     pub time_joined: i64, 
