@@ -35,7 +35,14 @@ pub struct VoteMilestone<'info> {
         payer = voter,
         bump
     )]
-    pub vote: Box<Account<'info, Vote>>,
+    pub vote: Account<'info, Vote>,
+
+    #[account(
+        mut,
+        seeds = [USER_SEED, voter.key().as_ref()],
+        bump = user.bump
+    )]
+    pub user: Account<'info, User>,
 
     pub vault_mint: InterfaceAccount<'info, anchor_spl::token_interface::Mint>,
 
@@ -76,6 +83,9 @@ impl<'info> VoteMilestone<'info> {
             self.milestone.vote_against = self.milestone.vote_against.checked_add(1).unwrap();
             self.milestone.vote_against_weight = self.milestone.vote_against_weight.checked_add(voting_weight).unwrap();
         }
+
+        self.user.total_votes = self.user.total_votes.checked_add(1).unwrap();
+        self.user.last_active_time = clock.unix_timestamp;
 
         Ok(())
 

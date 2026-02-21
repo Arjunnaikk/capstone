@@ -1,5 +1,5 @@
 use anchor_lang::prelude::*;
-use crate::{errors::Error, state::project::*};
+use crate::{errors::Error, state::{USER_SEED, User, project::*}};
 
 #[derive(Accounts)]
 #[instruction(project_name: String)]
@@ -14,7 +14,14 @@ pub struct CreateProject<'info> {
         seeds= [PROJECT_SEED, project_name.as_bytes(), project_authority.key().as_ref()],
         bump
     )]
-    pub project: Box<Account<'info, Project>>,
+    pub project: Account<'info, Project>,
+
+     #[account(
+        mut,
+        seeds = [USER_SEED, project_authority.key().as_ref()],
+        bump = user.bump
+    )]
+    pub user: Account<'info, User>,
 
     pub system_program: Program<'info, System>,
 }
@@ -26,7 +33,8 @@ impl<'info> CreateProject<'info> {
         target_amount: u64,
         deadline: i64,
     ) -> Result<()> {
-
+        
+        let clock = Clock::get()?;
         require!(target_amount > 0, Error::ZeroAmount);
 
         self.project.set_inner(Project {
@@ -41,6 +49,9 @@ impl<'info> CreateProject<'info> {
             funder_count: 0, 
             bump: self.project.bump,
         });
+
+        self.user.projects_posted = self.user.projects_posted.checked_add(1).unwrap();
+        self.user.last_active_time = clock.unix_timestamp;
 
         Ok(())
     }

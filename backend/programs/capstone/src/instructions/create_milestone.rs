@@ -1,5 +1,5 @@
 use anchor_lang::prelude::*;
-use crate::{errors::Error, state::milestone::*};
+use crate::{errors::Error, state::{USER_SEED, User, milestone::*}};
 
 #[derive(Clone, Debug, AnchorDeserialize, AnchorSerialize)]
 pub struct CreateMilestoneArgs {
@@ -21,7 +21,14 @@ pub struct CreateMilestone<'info> {
         payer = milestone_authority,
         bump
     )]
-    pub milestone: Box<Account<'info, Milestone>>,
+    pub milestone: Account<'info, Milestone>,
+
+    #[account(
+        mut,
+        seeds = [USER_SEED, milestone_authority.key().as_ref()],
+        bump = user.bump
+    )]
+    pub user: Account<'info, User>,
 
     pub system_program: Program<'info, System>,
 }
@@ -47,6 +54,8 @@ impl<'info> CreateMilestone<'info> {
             vote_for_weight: 0, 
             bump: self.milestone.bump,
         });
+
+        self.user.last_active_time = clock.unix_timestamp;
 
         Ok(())
     }
