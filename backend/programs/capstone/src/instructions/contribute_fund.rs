@@ -37,6 +37,15 @@ pub struct ContributeFund<'info> {
     )]
     pub user: Account<'info, User>,
 
+     #[account(
+        init,
+        payer = funder,
+        space = Project::DISCRIMINATOR.len() +  Project::INIT_SPACE,
+        seeds= [CONTRIBUTION_SEED,  funder.key().as_ref(), project.key().as_ref()],
+        bump
+    )]
+    pub contribution: Account<'info, Contribution>,
+
     #[account(
         init_if_needed,
         payer = funder,
@@ -102,6 +111,12 @@ impl<'info> ContributeFund<'info> {
             amount,
             self.vault_mint.decimals,
         )?;
+
+        self.contribution.set_inner(Contribution { 
+            funder: self.funder.key(), 
+            project:self.project.key(), 
+            amount, 
+            bump: self.contribution.bump });
 
         self.project.collected_amount = self.project.collected_amount.checked_add(amount).unwrap();
         self.project.funder_count = self.project.funder_count.checked_add(1).unwrap();

@@ -4,6 +4,9 @@ use anchor_lang::prelude::*;
 pub enum Error {
     #[msg("Amount cannot be zero")]
     ZeroAmount,
+    
+    #[msg("Project is invalid")]
+    InvalidProject,
 
     #[msg("Invalid milestone type provided.")]
     InvalidMilestoneType,
