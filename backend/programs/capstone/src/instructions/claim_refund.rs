@@ -43,7 +43,6 @@ pub struct ClaimRefund<'info> {
     pub system_program: Program<'info, System>,
 }
 
-
 impl<'info> ClaimRefund<'info> {
     pub fn claim_refund(&mut self) -> Result<()> {
         require!(

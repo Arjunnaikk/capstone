@@ -3,13 +3,6 @@ use anchor_lang::{
     prelude::*,
     system_program::{transfer, Transfer},
 };
-use anchor_spl::{
-    associated_token::AssociatedToken,
-    token_interface::{
-        mint_to_checked, Mint, MintToChecked,
-        TokenAccount, TokenInterface,
-    },
-};
 
 #[derive(Accounts)]
 pub struct ContributeFund<'info> {
