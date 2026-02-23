@@ -40,31 +40,13 @@ pub struct ContributeFund<'info> {
      #[account(
         init,
         payer = funder,
-        space = Project::DISCRIMINATOR.len() +  Project::INIT_SPACE,
+        space = Contribution::DISCRIMINATOR.len() +  Contribution::INIT_SPACE,
         seeds= [CONTRIBUTION_SEED,  funder.key().as_ref(), project.key().as_ref()],
         bump
     )]
     pub contribution: Account<'info, Contribution>,
 
-    #[account(
-        init_if_needed,
-        payer = funder,
-        associated_token::mint = vault_mint,
-        associated_token::authority = funder,
-        associated_token::token_program = token_program
-    )]
-    pub funder_receipt_ata: InterfaceAccount<'info, TokenAccount>,
-
-    #[account(
-        mut,
-        constraint = vault_mint.mint_authority == 
-            anchor_lang::solana_program::program_option::COption::Some(vault.key())
-    )]
-    pub vault_mint: InterfaceAccount<'info, Mint>,
-
     pub system_program: Program<'info, System>,
-    pub token_program: Interface<'info, TokenInterface>,
-    pub associated_token_program: Program<'info, AssociatedToken>,
 }
 
 impl<'info> ContributeFund<'info> {
@@ -97,20 +79,6 @@ impl<'info> ContributeFund<'info> {
             VAULT_SEED,
             &[self.vault.bump],
         ]];
-
-        mint_to_checked(
-            CpiContext::new_with_signer(
-                self.token_program.to_account_info(),
-                MintToChecked {
-                    mint: self.vault_mint.to_account_info(),
-                    to: self.funder_receipt_ata.to_account_info(),
-                    authority: self.vault.to_account_info(),
-                },
-                signer_seeds,
-            ),
-            amount,
-            self.vault_mint.decimals,
-        )?;
 
         self.contribution.set_inner(Contribution { 
             funder: self.funder.key(), 
