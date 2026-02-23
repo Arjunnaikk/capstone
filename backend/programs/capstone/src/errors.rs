@@ -25,4 +25,13 @@ pub enum Error {
 
     #[msg("Numerical overflow")]
     NotVotingStage,
+
+    #[msg("Project not in failed state")]
+    ProjectNotFailed,
+
+    #[msg("No contribution found")]
+    NoContribution,
+
+    #[msg("Refund already claimed")]
+    AlreadyRefunded,
 }
