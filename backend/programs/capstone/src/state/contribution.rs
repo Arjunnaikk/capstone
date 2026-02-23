@@ -12,11 +12,3 @@ pub struct Contribution {
     pub bump: u8,
     
 }
-
-#[derive(Clone, Copy, PartialEq, Eq, InitSpace, AnchorSerialize, AnchorDeserialize)]
-pub enum ProjectState {
-    Funding,
-    Development,
-    Failed,
-    Completed,
-}

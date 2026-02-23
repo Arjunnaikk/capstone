@@ -1,6 +1,8 @@
-use anchor_lang::prelude::*;
+use anchor_lang::system_program::transfer;
+use anchor_lang::{prelude::*, system_program::Transfer};
+use crate::errors::Error::{self, *};    
 
-use crate::state::{CONTRIBUTION_SEED, Contribution, PROJECT_SEED, Project, USER_SEED, User, VAULT_SEED, Vault};
+use crate::state::{CONTRIBUTION_SEED, Contribution, PROJECT_SEED, Project, ProjectState, VAULT_SEED, Vault};
 
 #[derive(Accounts)]
 pub struct ClaimRefund<'info> {
@@ -44,19 +46,16 @@ pub struct ClaimRefund<'info> {
 
 impl<'info> ClaimRefund<'info> {
     pub fn claim_refund(&mut self) -> Result<()> {
-        // 1️⃣ Ensure project failed
         require!(
             self.project.project_state == ProjectState::Failed,
             Error::ProjectNotFailed
         );
 
-        // 2️⃣ Ensure contribution exists
         require!(
             self.contribution.amount > 0,
             Error::NoContribution
         );
 
-        // 3️⃣ Prevent double refund
         require!(
             !self.contribution.refunded,
             Error::AlreadyRefunded
@@ -64,10 +63,8 @@ impl<'info> ClaimRefund<'info> {
 
         let refund_amount = self.contribution.amount;
 
-        // 4️⃣ Mark refunded FIRST (reentrancy safe pattern)
         self.contribution.refunded = true;
 
-        // 5️⃣ Transfer SOL from vault to funder
         let signer_seeds: &[&[&[u8]]] = &[&[
             VAULT_SEED,
             &[self.vault.bump],
@@ -88,5 +85,3 @@ impl<'info> ClaimRefund<'info> {
         Ok(())
     }
 }
-
-// funder, vault, contribution
