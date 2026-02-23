@@ -42,4 +42,51 @@ pub struct ClaimRefund<'info> {
 }
 
 
+impl<'info> ClaimRefund<'info> {
+    pub fn claim_refund(&mut self) -> Result<()> {
+        // 1️⃣ Ensure project failed
+        require!(
+            self.project.project_state == ProjectState::Failed,
+            Error::ProjectNotFailed
+        );
+
+        // 2️⃣ Ensure contribution exists
+        require!(
+            self.contribution.amount > 0,
+            Error::NoContribution
+        );
+
+        // 3️⃣ Prevent double refund
+        require!(
+            !self.contribution.refunded,
+            Error::AlreadyRefunded
+        );
+
+        let refund_amount = self.contribution.amount;
+
+        // 4️⃣ Mark refunded FIRST (reentrancy safe pattern)
+        self.contribution.refunded = true;
+
+        // 5️⃣ Transfer SOL from vault to funder
+        let signer_seeds: &[&[&[u8]]] = &[&[
+            VAULT_SEED,
+            &[self.vault.bump],
+        ]];
+
+        transfer(
+            CpiContext::new_with_signer(
+                self.system_program.to_account_info(),
+                Transfer {
+                    from: self.vault.to_account_info(),
+                    to: self.funder.to_account_info(),
+                },
+                signer_seeds,
+            ),
+            refund_amount,
+        )?;
+
+        Ok(())
+    }
+}
+
 // funder, vault, contribution
