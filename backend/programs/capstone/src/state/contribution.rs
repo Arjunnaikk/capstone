@@ -8,6 +8,7 @@ pub struct Contribution {
     pub funder: Pubkey,
     pub project: Pubkey,
     pub amount: u64,
+    pub refunded: bool,
     pub bump: u8,
     
 }

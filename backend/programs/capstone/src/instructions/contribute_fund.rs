@@ -116,6 +116,7 @@ impl<'info> ContributeFund<'info> {
             funder: self.funder.key(), 
             project:self.project.key(), 
             amount, 
+            refunded: false,
             bump: self.contribution.bump });
 
         self.project.collected_amount = self.project.collected_amount.checked_add(amount).unwrap();
