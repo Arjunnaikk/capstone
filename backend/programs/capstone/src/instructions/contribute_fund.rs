@@ -30,8 +30,8 @@ pub struct ContributeFund<'info> {
     )]
     pub user: Account<'info, User>,
 
-     #[account(
-        init,
+    #[account(
+        init_if_needed,
         payer = funder,
         space = Contribution::DISCRIMINATOR.len() +  Contribution::INIT_SPACE,
         seeds= [CONTRIBUTION_SEED,  funder.key().as_ref(), project.key().as_ref()],
@@ -68,26 +68,43 @@ impl<'info> ContributeFund<'info> {
             amount,
         )?;
 
-        let signer_seeds: &[&[&[u8]]] = &[&[
-            VAULT_SEED,
-            &[self.vault.bump],
-        ]];
+        let is_new_contributor = self.contribution.amount == 0;
 
-        self.contribution.set_inner(Contribution { 
-            funder: self.funder.key(), 
-            project:self.project.key(), 
-            amount, 
-            refunded: false,
-            bump: self.contribution.bump });
+        if is_new_contributor {
+            self.contribution.funder = self.funder.key();
+            self.contribution.project = self.project.key();
+            self.contribution.refunded = false;
+            self.contribution.bump = self.contribution.bump;
 
-        self.project.collected_amount = self.project.collected_amount.checked_add(amount).unwrap();
-        self.project.funder_count = self.project.funder_count.checked_add(1).unwrap();
+            self.project.funder_count = self
+                .project
+                .funder_count
+                .checked_add(1)
+                .ok_or(Error::Overflow)?;
+        }
+
+        self.contribution.amount = self
+            .contribution
+            .amount
+            .checked_add(amount)
+            .ok_or(Error::Overflow)?;
+
+        self.project.collected_amount = self
+            .project
+            .collected_amount
+            .checked_add(amount)
+            .ok_or(Error::Overflow)?;
 
         if self.project.collected_amount >= self.project.target_amount {
             self.project.project_state = ProjectState::Development;
         }
 
-        self.user.donated_amount = self.user.donated_amount.checked_add(amount).unwrap();
+        self.user.donated_amount = self
+            .user
+            .donated_amount
+            .checked_add(amount)
+            .ok_or(Error::Overflow)?;
+
         self.user.last_active_time = clock.unix_timestamp;
 
         Ok(())

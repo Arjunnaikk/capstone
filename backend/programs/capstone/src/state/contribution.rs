@@ -10,5 +10,4 @@ pub struct Contribution {
     pub amount: u64,
     pub refunded: bool,
     pub bump: u8,
-    
 }

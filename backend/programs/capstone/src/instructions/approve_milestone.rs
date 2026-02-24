@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use crate::{errors::Error, state::*};
 
-const QUORUM_PERCENT: u64 = 20; // 20% participation required
+const QUORUM_PERCENT: u64 = 30; 
 const BPS_DENOMINATOR: u64 = 10000;
 
 #[derive(Accounts)]
@@ -29,7 +29,7 @@ pub struct ApproveMilestone<'info> {
     )]
     pub vault: SystemAccount<'info>,
 
-    /// CHECK: This is safe because we are only sending SOL to the exact pubkey stored in the Project state
+    /// CHECK: only sending SOL to the exact pubkey stored in the Project state
     #[account(
         mut,
         address = project.project_authority
