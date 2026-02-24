@@ -8,7 +8,6 @@ pub struct Project {
     pub project_authority: Pubkey,
     #[max_len(50)]
     pub project_name: String, 
-    #[max_len(32)]
     pub target_amount: u64,
     pub collected_amount: u64,
     pub withdrawn_amount: u64,

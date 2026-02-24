@@ -11,8 +11,8 @@ pub struct Milestone{
     pub milestone_status: MilestoneState,
     pub milestone_type: MilestoneType,
     pub milestone_deadline: i64, 
-    pub vote_against: u8,
-    pub vote_for: u8,
+    pub votes_casted: u32,
+    pub amount_voted: u64,
     pub vote_against_weight: u64, 
     pub vote_for_weight: u64, 
     pub bump: u8

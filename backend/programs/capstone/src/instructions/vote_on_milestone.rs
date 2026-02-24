@@ -138,18 +138,16 @@ impl<'info> VoteMilestone<'info> {
         });
 
         if decision {
-            self.milestone.vote_for =
-                self.milestone.vote_for.saturating_add(1);
             self.milestone.vote_for_weight =
                 self.milestone.vote_for_weight
                     .saturating_add(final_voting_weight);
         } else {
-            self.milestone.vote_against =
-                self.milestone.vote_against.saturating_add(1);
             self.milestone.vote_against_weight =
                 self.milestone.vote_against_weight
                     .saturating_add(final_voting_weight);
         }
+
+        self.milestone.votes_casted = self.milestone.votes_casted.saturating_add(1);
 
         self.user.total_votes =
             self.user.total_votes.saturating_add(1);
