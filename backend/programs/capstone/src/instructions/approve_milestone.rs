@@ -3,12 +3,11 @@ use crate::{errors::Error, state::*};
 
 const QUORUM_PERCENT: u64 = 30; 
 const BPS_DENOMINATOR: u64 = 10000;
+const MAX_ATTEMPTS: u8 = 3;
 
 #[derive(Accounts)]
 pub struct ApproveMilestone<'info> {
-    #[account(mut)]
-    pub voter: Signer<'info>,
-
+    // no signer needed for automation
     #[account(
         mut,
         seeds = [PROJECT_SEED, project.project_name.as_bytes(), project.project_authority.as_ref()],
@@ -21,6 +20,13 @@ pub struct ApproveMilestone<'info> {
         constraint = milestone.project_id == project.key() @ Error::InvalidProject
     )]
     pub milestone: Account<'info, Milestone>,
+
+    #[account(
+        mut,
+        seeds = [USER_SEED, project.project_authority.as_ref()],
+        bump = creator_user.bump
+    )]
+    pub creator_user: Account<'info, User>,
 
     #[account(
         mut,
@@ -40,7 +46,7 @@ pub struct ApproveMilestone<'info> {
 }
 
 impl<'info> ApproveMilestone<'info> {
-    pub fn approve_milestone(&mut self, ) -> Result<()>{
+    pub fn approve_milestone(&mut self) -> Result<()> {
         let clock = Clock::get()?;
         let current_time = clock.unix_timestamp;
 
@@ -49,7 +55,8 @@ impl<'info> ApproveMilestone<'info> {
             Error::NotVotingStage 
         );
         require!(
-            current_time > self.milestone.milestone_deadline, Error::ProjectExpired
+            current_time > self.milestone.milestone_deadline, 
+            Error::NotVotingStage 
         );
 
         let required_funder_quorum = (self.project.funder_count as u64)
@@ -63,33 +70,45 @@ impl<'info> ApproveMilestone<'info> {
         let headcount_passed = (self.milestone.votes_casted as u64) >= required_funder_quorum;
         let capital_passed = self.milestone.amount_voted >= required_capital_quorum;
 
-        if headcount_passed && capital_passed {
-            if self.milestone.vote_for_weight > self.milestone.vote_against_weight {
-                self.milestone.milestone_status = MilestoneState::Approved;
-                self.project.milestones_completed = self.project.milestones_completed.saturating_add(1);
+        if headcount_passed && capital_passed && self.milestone.vote_for_weight > self.milestone.vote_against_weight {
+            
 
-                let payout_amount = self.project.collected_amount
-                    .saturating_mul(self.milestone.milestone_claim as u64)
-                    .checked_div(BPS_DENOMINATOR)
-                    .unwrap_or(0);
+            self.milestone.milestone_status = MilestoneState::Approved;
+            
+            self.project.milestones_completed = self.project.milestones_completed.saturating_add(1);
+            
+            self.creator_user.milestones_cleared = self.creator_user.milestones_cleared.saturating_add(1);
 
-                let remaining_funds = self.project.collected_amount.saturating_sub(self.project.withdrawn_amount);
-                require!(payout_amount <= remaining_funds, Error::ProjectExpired);
-
-                **self.vault.lamports.borrow_mut() = self.vault.lamports()
-                    .checked_sub(payout_amount)
-                    .ok_or(Error::ProjectExpired)?;
-                **self.project_authority.lamports.borrow_mut() = self.project_authority.lamports()
-                    .checked_add(payout_amount)
-                    .unwrap();
-
-                self.project.withdrawn_amount = self.project.withdrawn_amount.saturating_add(payout_amount);
-
-            } else {
-                self.milestone.milestone_status = MilestoneState::Disapproved;
+         
+            if self.project.milestones_completed >= 5 {
+                self.project.project_state = ProjectState::Completed;
+                self.creator_user.projects_succeed = self.creator_user.projects_succeed.saturating_add(1);
             }
+
+            let payout_amount = self.project.collected_amount
+                .saturating_mul(self.milestone.milestone_claim as u64)
+                .checked_div(BPS_DENOMINATOR)
+                .unwrap_or(0);
+
+            let remaining_funds = self.project.collected_amount.saturating_sub(self.project.withdrawn_amount);
+            require!(payout_amount <= remaining_funds, Error::InsufficientFunds);
+
+            **self.vault.lamports.borrow_mut() = self.vault.lamports()
+                .checked_sub(payout_amount)
+                .ok_or(Error::InsufficientFunds)?;
+            **self.project_authority.lamports.borrow_mut() = self.project_authority.lamports()
+                .checked_add(payout_amount)
+                .unwrap();
+
+            self.project.withdrawn_amount = self.project.withdrawn_amount.saturating_add(payout_amount);
+
         } else {
+          
             self.milestone.milestone_status = MilestoneState::Disapproved;
+
+            if current_time > self.project.project_deadline || self.milestone.attempt_number >= MAX_ATTEMPTS {
+                self.project.project_state = ProjectState::Failed;
+            }
         }
 
         Ok(())

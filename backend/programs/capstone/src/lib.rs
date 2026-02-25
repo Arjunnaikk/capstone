@@ -12,5 +12,10 @@ declare_id!("3fk3PSD454iVm83yGsWtMo3xrwwV8MAUtSMhYPvimzTo");
 pub mod capstone {
     use super::*;
 
+    
+    pub fn approve_milestone(ctx: Context<ApproveMilestone>) -> Result<()> {
+        ctx.accounts.approve_milestone()?;
+        Ok(())
+    }
 
 }

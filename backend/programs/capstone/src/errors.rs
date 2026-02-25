@@ -34,4 +34,7 @@ pub enum Error {
 
     #[msg("Refund already claimed")]
     AlreadyRefunded,
+
+    #[msg("Refund already claimed")]
+    InsufficientFunds,
 }
