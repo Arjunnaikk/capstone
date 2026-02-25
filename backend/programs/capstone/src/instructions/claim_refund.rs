@@ -1,20 +1,19 @@
-use anchor_lang::system_program::transfer;
-use anchor_lang::{prelude::*, system_program::Transfer};
-use crate::errors::Error::{self, *};    
-
-use crate::state::{CONTRIBUTION_SEED, Contribution, PROJECT_SEED, Project, ProjectState, VAULT_SEED, Vault};
+use anchor_lang::prelude::*;
+use crate::errors::Error;
+use crate::state::{CONTRIBUTION_SEED, Contribution, PROJECT_SEED, Project, ProjectState, VAULT_SEED};
 
 #[derive(Accounts)]
 pub struct ClaimRefund<'info> {
     #[account(mut)]
     pub funder: Signer<'info>,
 
+    /// CHECK: only mutate lamports and verify seeds
     #[account(
         mut,
-        seeds = [VAULT_SEED],
-        bump = vault.bump
+        seeds = [VAULT_SEED, project.key().as_ref()], 
+        bump 
     )]
-    pub vault: Account<'info, Vault>,
+    pub vault: AccountInfo<'info>, 
 
     #[account(
         mut,
@@ -47,39 +46,34 @@ impl<'info> ClaimRefund<'info> {
     pub fn claim_refund(&mut self) -> Result<()> {
         require!(
             self.project.project_state == ProjectState::Failed,
-            Error::ProjectNotFailed
+            Error::ProjectNotFailed 
         );
-
         require!(
             self.contribution.amount > 0,
             Error::NoContribution
         );
-
         require!(
             !self.contribution.refunded,
             Error::AlreadyRefunded
         );
 
-        let refund_amount = self.contribution.amount;
+        let remaining_vault_funds = self.project.collected_amount.saturating_sub(self.project.withdrawn_amount);
+        
+        let refund_amount = (self.contribution.amount as u128)
+            .checked_mul(remaining_vault_funds as u128)
+            .ok_or(Error::Overflow)?
+            .checked_div(self.project.collected_amount as u128)
+            .ok_or(Error::Overflow)? as u64;
 
         self.contribution.refunded = true;
 
-        let signer_seeds: &[&[&[u8]]] = &[&[
-            VAULT_SEED,
-            &[self.vault.bump],
-        ]];
-
-        transfer(
-            CpiContext::new_with_signer(
-                self.system_program.to_account_info(),
-                Transfer {
-                    from: self.vault.to_account_info(),
-                    to: self.funder.to_account_info(),
-                },
-                signer_seeds,
-            ),
-            refund_amount,
-        )?;
+        **self.vault.lamports.borrow_mut() = self.vault.lamports()
+            .checked_sub(refund_amount)
+            .ok_or(Error::ZeroFund)?; 
+            
+        **self.funder.to_account_info().lamports.borrow_mut() = self.funder.to_account_info().lamports()
+            .checked_add(refund_amount)
+            .ok_or(Error::Overflow)?;
 
         Ok(())
     }
