@@ -19,7 +19,7 @@ pub struct InitializeUser<'info> {
 }
 
 impl<'info> InitializeUser<'info> {
-    pub fn initialize(&mut self, bumps: InitializeUserBumps) -> Result<()> {
+    pub fn init_user(&mut self, bumps: InitializeUserBumps) -> Result<()> {
         self.user_account.set_inner(User {
             donated_amount: 0,
             total_votes: 0,
