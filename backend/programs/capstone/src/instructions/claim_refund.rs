@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 use crate::errors::Error;
-use crate::state::{CONTRIBUTION_SEED, Contribution, PROJECT_SEED, Project, ProjectState, VAULT_SEED};
+use crate::state::{CONTRIBUTION_SEED, Contribution, PROJECT_SEED, Project, ProjectState, VAULT_SEED, Vault};
 
 #[derive(Accounts)]
 pub struct ClaimRefund<'info> {
@@ -10,10 +10,10 @@ pub struct ClaimRefund<'info> {
     /// CHECK: only mutate lamports and verify seeds
     #[account(
         mut,
-        seeds = [VAULT_SEED, project.key().as_ref()], 
-        bump 
+        seeds = [VAULT_SEED], 
+        bump = vault.bump
     )]
-    pub vault: AccountInfo<'info>, 
+    pub vault: Account<'info, Vault>, 
 
     #[account(
         mut,
@@ -67,7 +67,7 @@ impl<'info> ClaimRefund<'info> {
 
         self.contribution.refunded = true;
 
-        **self.vault.lamports.borrow_mut() = self.vault.lamports()
+        **self.vault.to_account_info().lamports.borrow_mut() = self.vault.to_account_info().lamports()
             .checked_sub(refund_amount)
             .ok_or(Error::ZeroFund)?; 
             
