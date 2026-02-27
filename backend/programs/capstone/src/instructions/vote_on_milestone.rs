@@ -75,8 +75,8 @@ impl<'info> VoteMilestone<'info> {
         );
 
         require!(
-            current_time <= self.milestone.milestone_deadline,
-            Error::NotVotingStage
+            current_time <= self.project.project_deadline,
+            Error::NotEnoughTimeLeft
         );
 
         let tokens = self.contribution.amount;

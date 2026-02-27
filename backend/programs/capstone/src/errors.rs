@@ -37,4 +37,13 @@ pub enum Error {
 
     #[msg("Refund already claimed")]
     InsufficientFunds,
+
+    #[msg("You can only retry a milestone that has been disapproved.")]
+    NotDisapproved,
+
+    #[msg("You have reached the maximum number of attempts for this milestone.")]
+    MaxAttemptsReached,
+
+    #[msg("There is not enough time left before the overall project deadline to conduct a full vote.")]
+    NotEnoughTimeLeft,
 }

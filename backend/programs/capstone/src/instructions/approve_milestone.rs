@@ -54,10 +54,6 @@ impl<'info> ApproveMilestone<'info> {
             self.milestone.milestone_status == MilestoneState::Voting,
             Error::NotVotingStage 
         );
-        require!(
-            current_time > self.milestone.milestone_deadline, 
-            Error::NotVotingStage 
-        );
 
         let required_funder_quorum = (self.project.funder_count as u64)
             .saturating_mul(QUORUM_PERCENT)
@@ -72,13 +68,11 @@ impl<'info> ApproveMilestone<'info> {
 
         if headcount_passed && capital_passed && self.milestone.vote_for_weight > self.milestone.vote_against_weight {
             
-
             self.milestone.milestone_status = MilestoneState::Approved;
             
             self.project.milestones_completed = self.project.milestones_completed.saturating_add(1);
             
             self.creator_user.milestones_cleared = self.creator_user.milestones_cleared.saturating_add(1);
-
          
             if self.project.milestones_completed >= 5 {
                 self.project.project_state = ProjectState::Completed;
@@ -103,7 +97,6 @@ impl<'info> ApproveMilestone<'info> {
             self.project.withdrawn_amount = self.project.withdrawn_amount.saturating_add(payout_amount);
 
         } else {
-          
             self.milestone.milestone_status = MilestoneState::Disapproved;
 
             if current_time > self.project.project_deadline || self.milestone.attempt_number >= MAX_ATTEMPTS {

@@ -1,9 +1,7 @@
-use crate::{
-    errors::Error,
-    state::{milestone::*, Project, User, Vault, PROJECT_SEED, USER_SEED, VAULT_SEED},
-};
+use crate::{accounts::ApproveMilestone, errors::Error, state::*};
+use anchor_lang::{InstructionData, prelude::*};
 use anchor_lang::solana_program::instruction::Instruction;
-use anchor_lang::{prelude::*, InstructionData};
+
 use tuktuk_program::{
     compile_transaction,
     tuktuk::{
@@ -15,40 +13,26 @@ use tuktuk_program::{
     TransactionSourceV0,
 };
 
-#[derive(Clone, Debug, AnchorDeserialize, AnchorSerialize)]
-pub struct CreateMilestoneArgs {
-    pub milestone_type: MilestoneType,
-    pub milestone_claim: u16,
-}
+const VOTING_WINDOW_SECONDS: i64 = 172_800; // 48 hours in seconds
+const MAX_ATTEMPTS: u8 = 3;
 
 #[derive(Accounts)]
-#[instruction(args: CreateMilestoneArgs)]
-pub struct CreateMilestone<'info> {
+pub struct RetryMilestone<'info> {
     #[account(mut)]
     pub milestone_authority: Signer<'info>,
 
     #[account(
-        init,
-        space = Milestone::DISCRIMINATOR.len() +  Milestone::INIT_SPACE,
-        seeds= [MILESTONE_SEED, project.key().as_ref(), &[args.milestone_type as u8]],
-        payer = milestone_authority,
-        bump
-    )]
-    pub milestone: Account<'info, Milestone>,
-
-    #[account(
         mut,
-        seeds = [VAULT_SEED],
-        bump = vault.bump
-    )]
-    pub vault: Account<'info, Vault>,
-
-    #[account(
-        mut,
-        seeds = [PROJECT_SEED, project.project_name.as_bytes(), project.project_authority.as_ref()],
+        seeds = [PROJECT_SEED, project.project_name.as_bytes(), milestone_authority.key().as_ref()],
         bump = project.bump
     )]
     pub project: Account<'info, Project>,
+
+    #[account(
+        mut,
+        constraint = milestone.project_id == project.key() @ Error::InvalidProject
+    )]
+    pub milestone: Account<'info, Milestone>,
 
     #[account(
         mut,
@@ -57,7 +41,13 @@ pub struct CreateMilestone<'info> {
     )]
     pub user: Account<'info, User>,
 
-    // TUKTUK
+    #[account(
+        mut,
+        seeds = [VAULT_SEED],
+        bump = vault.bump
+    )]
+    pub vault: Account<'info, Vault>,
+
     #[account(mut)]
     /// CHECK: Don't need to parse this account, just using it in CPI
     pub task_queue: UncheckedAccount<'info>,
@@ -68,6 +58,7 @@ pub struct CreateMilestone<'info> {
     /// CHECK: Initialized in CPI
     #[account(mut)]
     pub task: UncheckedAccount<'info>,
+
     /// CHECK: Via seeds
     #[account(
         mut,
@@ -77,33 +68,40 @@ pub struct CreateMilestone<'info> {
     pub queue_authority: AccountInfo<'info>,
 
     pub system_program: Program<'info, System>,
+
     pub tuktuk_program: Program<'info, Tuktuk>,
 }
 
-impl<'info> CreateMilestone<'info> {
-    pub fn create_milestone(
-        &mut self,
-        args: CreateMilestoneArgs,
-        task_id: u16,
-        bumps: &CreateMilestoneBumps,
-    ) -> Result<()> {
+impl<'info> RetryMilestone<'info> {
+    pub fn retry_milestone(&mut self, task_id: u16,
+        bumps: &RetryMilestoneBumps) -> Result<()> {
         let clock = Clock::get()?;
         let current_time = clock.unix_timestamp;
-
         let deadline = current_time.checked_add(172_800).unwrap();
 
-        self.milestone.set_inner(Milestone {
-            project_id: self.project.key(),
-            milestone_claim: args.milestone_claim,
-            attempt_number: 0,
-            milestone_status: MilestoneState::Voting,
-            milestone_type: args.milestone_type,
-            votes_casted: 0,
-            amount_voted: 0,
-            vote_against_weight: 0,
-            vote_for_weight: 0,
-            bump: self.milestone.bump,
-        });
+        require!(
+            self.milestone.milestone_status == MilestoneState::Disapproved,
+            Error::NotDisapproved
+        );
+
+        require!(
+            self.milestone.attempt_number < MAX_ATTEMPTS,
+            Error::MaxAttemptsReached
+        );
+
+        let new_voting_deadline = current_time.saturating_add(VOTING_WINDOW_SECONDS);
+
+        require!(
+            new_voting_deadline <= self.project.project_deadline,
+            Error::NotEnoughTimeLeft
+        );
+
+        self.milestone.vote_for_weight = 0;
+        self.milestone.vote_against_weight = 0;
+        self.milestone.votes_casted = 0;
+        self.milestone.amount_voted = 0;
+        self.milestone.attempt_number = self.milestone.attempt_number.saturating_add(1);
+        self.milestone.milestone_status = MilestoneState::Voting;
 
         self.user.last_active_time = clock.unix_timestamp;
         self.user.milestones_posted = self.user.milestones_posted.checked_add(1).unwrap();

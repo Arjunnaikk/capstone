@@ -10,7 +10,6 @@ pub struct Milestone{
     pub attempt_number: u8,
     pub milestone_status: MilestoneState,
     pub milestone_type: MilestoneType,
-    pub milestone_deadline: i64, 
     pub votes_casted: u32,
     pub amount_voted: u64,
     pub vote_against_weight: u64, 
