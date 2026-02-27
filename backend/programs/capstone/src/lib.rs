@@ -18,7 +18,7 @@ pub mod capstone {
     }
 
     pub fn initialize_user(ctx: Context<InitializeUser>) -> Result<()> {
-        ctx.accounts.init_user(ctx.bumps)?;
+        ctx.accounts.init_user()?;
         Ok(())
     }
     
