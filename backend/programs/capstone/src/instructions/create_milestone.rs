@@ -92,6 +92,15 @@ impl<'info> CreateMilestone<'info> {
 
         let deadline = current_time.checked_add(172_800).unwrap();
 
+        require!(
+            deadline <= self.project.project_deadline,
+            Error::NotEnoughTimeLeft
+        );
+        require!(
+            self.project.milestones_posted < self.project.milestone_count,
+            Error::InvalidMilestoneCount
+        );
+
         self.milestone.set_inner(Milestone {
             project_id: self.project.key(),
             milestone_claim: args.milestone_claim,
@@ -100,6 +109,7 @@ impl<'info> CreateMilestone<'info> {
             milestone_type: args.milestone_type,
             votes_casted: 0,
             amount_voted: 0,
+            voting_end_time: deadline,
             vote_against_weight: 0,
             vote_for_weight: 0,
             bump: self.milestone.bump,

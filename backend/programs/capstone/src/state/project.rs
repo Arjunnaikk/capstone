@@ -12,6 +12,8 @@ pub struct Project {
     pub collected_amount: u64,
     pub withdrawn_amount: u64,
     pub project_state: ProjectState,
+    pub milestones_posted: u8, 
+    pub milestone_count: u8,
     pub milestones_completed: u8, 
     pub project_deadline: i64, 
     pub funder_count: u32, 

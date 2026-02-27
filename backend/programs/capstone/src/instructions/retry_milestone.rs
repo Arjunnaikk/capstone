@@ -1,6 +1,6 @@
-use crate::{accounts::ApproveMilestone, errors::Error, state::*};
-use anchor_lang::{InstructionData, prelude::*};
+use crate::{errors::Error, state::*};
 use anchor_lang::solana_program::instruction::Instruction;
+use anchor_lang::{prelude::*, InstructionData};
 
 use tuktuk_program::{
     compile_transaction,
@@ -13,7 +13,7 @@ use tuktuk_program::{
     TransactionSourceV0,
 };
 
-const VOTING_WINDOW_SECONDS: i64 = 172_800; // 48 hours in seconds
+const VOTING_WINDOW_SECONDS: i64 = 172_800;
 const MAX_ATTEMPTS: u8 = 3;
 
 #[derive(Accounts)]
@@ -73,11 +73,9 @@ pub struct RetryMilestone<'info> {
 }
 
 impl<'info> RetryMilestone<'info> {
-    pub fn retry_milestone(&mut self, task_id: u16,
-        bumps: &RetryMilestoneBumps) -> Result<()> {
+    pub fn retry_milestone(&mut self, task_id: u16, bumps: &RetryMilestoneBumps) -> Result<()> {
         let clock = Clock::get()?;
         let current_time = clock.unix_timestamp;
-        let deadline = current_time.checked_add(172_800).unwrap();
 
         require!(
             self.milestone.milestone_status == MilestoneState::Disapproved,
@@ -105,7 +103,6 @@ impl<'info> RetryMilestone<'info> {
 
         self.user.last_active_time = clock.unix_timestamp;
         self.user.milestones_posted = self.user.milestones_posted.checked_add(1).unwrap();
-
         let (compiled_tx, _) = compile_transaction(
             vec![Instruction {
                 program_id: crate::ID,
@@ -138,7 +135,7 @@ impl<'info> RetryMilestone<'info> {
                 &[&["queue_authority".as_bytes(), &[bumps.queue_authority]]],
             ),
             QueueTaskArgsV0 {
-                trigger: TriggerV0::Timestamp(deadline),
+                trigger: TriggerV0::Timestamp(new_voting_deadline),
                 transaction: TransactionSourceV0::CompiledV0(compiled_tx),
                 crank_reward: Some(1000001),
                 free_tasks: 1,

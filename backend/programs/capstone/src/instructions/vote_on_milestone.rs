@@ -47,8 +47,10 @@ pub struct VoteMilestone<'info> {
     pub milestone: Account<'info, Milestone>,
 
     #[account(
+        seeds = [CONTRIBUTION_SEED,  voter.key().as_ref(), project.key().as_ref()],
         constraint = contribution.funder == voter.key() @ Error::InvalidProject,
-        constraint = contribution.project == project.key() @ Error::InvalidProject
+        constraint = contribution.project == project.key() @ Error::InvalidProject,
+        bump = contribution.bump
     )]
     pub contribution: Account<'info, Contribution>,
 

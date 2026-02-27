@@ -35,7 +35,7 @@ pub enum Error {
     #[msg("Refund already claimed")]
     AlreadyRefunded,
 
-    #[msg("Refund already claimed")]
+    #[msg("Insufficient funds in vault")]
     InsufficientFunds,
 
     #[msg("You can only retry a milestone that has been disapproved.")]
@@ -46,4 +46,7 @@ pub enum Error {
 
     #[msg("There is not enough time left before the overall project deadline to conduct a full vote.")]
     NotEnoughTimeLeft,
+
+    #[msg("Invalid milestone count.")]
+    InvalidMilestoneCount,
 }

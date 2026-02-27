@@ -30,12 +30,15 @@ impl<'info> CreateProject<'info> {
     pub fn create_project(
         &mut self,
         project_name: String,
+        milestone_count: u8, 
         target_amount: u64,
         deadline: i64,
     ) -> Result<()> {
         
         let clock = Clock::get()?;
         require!(target_amount > 0, Error::ZeroAmount);
+
+        require!(milestone_count <= 5 && milestone_count > 0, Error::InvalidMilestoneCount);
 
         self.project.set_inner(Project {
             project_authority: self.project_authority.key(),
@@ -44,6 +47,8 @@ impl<'info> CreateProject<'info> {
             collected_amount: 0,
             withdrawn_amount:0,
             project_state: ProjectState::Funding,
+            milestones_posted: 0,
+            milestone_count: milestone_count,
             milestones_completed: 0, 
             project_deadline: deadline,
             funder_count: 0, 
