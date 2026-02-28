@@ -67,7 +67,7 @@ pub struct VoteMilestone<'info> {
 }
 
 impl<'info> VoteMilestone<'info> {
-    pub fn vote_milestone(&mut self, decision: bool) -> Result<()> {
+    pub fn vote_milestone(&mut self, decision: bool, bumps: VoteMilestoneBumps) -> Result<()> {
         let clock = Clock::get()?;
         let current_time = clock.unix_timestamp;
 
@@ -136,7 +136,7 @@ impl<'info> VoteMilestone<'info> {
             milestone_id: self.milestone.key(),
             decision,
             weight: final_voting_weight,
-            bump: self.vote.bump,
+            bump: bumps.vote,
         });
 
         if decision {

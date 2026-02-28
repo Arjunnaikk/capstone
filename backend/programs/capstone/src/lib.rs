@@ -22,23 +22,23 @@ pub mod capstone {
         Ok(())
     }
     
-    pub fn create_project(ctx: Context<CreateProject>, project_name: String, milestone_count: u8, target_amount: u64, deadline: i64) -> Result<()> {
-        ctx.accounts.create_project(project_name, milestone_count, target_amount, deadline)?;
+    pub fn create_project(ctx: Context<CreateProject>, args: CreateProjectArgs) -> Result<()> {
+        ctx.accounts.create_project(args, ctx.bumps)?;
         Ok(())
     }
 
     pub fn create_milestone(ctx: Context<CreateMilestone>, args: CreateMilestoneArgs, task_id: u16) -> Result<()> {
-        ctx.accounts.create_milestone(args, task_id, &ctx.bumps)?;
+        ctx.accounts.create_milestone(args, task_id, ctx.bumps)?;
         Ok(())
     }
 
     pub fn contribute_fund(ctx: Context<ContributeFund>, amount: u64) -> Result<()> {
-        ctx.accounts.contribute_fund(amount)?;
+        ctx.accounts.contribute_fund(amount, ctx.bumps)?;
         Ok(())
     }
 
     pub fn vote_on_milestone(ctx: Context<VoteMilestone>, approve: bool) -> Result<()> {
-        ctx.accounts.vote_milestone(approve)?;
+        ctx.accounts.vote_milestone(approve, ctx.bumps)?;
         Ok(())
     }
     pub fn approve_milestone(ctx: Context<ApproveMilestone>) -> Result<()> {
@@ -47,7 +47,7 @@ pub mod capstone {
     }
 
     pub fn retry_milestone(ctx: Context<RetryMilestone>, task_id: u16) -> Result<()> {
-        ctx.accounts.retry_milestone(task_id, &ctx.bumps)?;
+        ctx.accounts.retry_milestone(task_id, ctx.bumps)?;
         Ok(())
     }
 
@@ -55,5 +55,4 @@ pub mod capstone {
         ctx.accounts.claim_refund()?;
         Ok(())
     }
-
 }

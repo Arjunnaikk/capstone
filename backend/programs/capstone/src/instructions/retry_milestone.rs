@@ -73,7 +73,7 @@ pub struct RetryMilestone<'info> {
 }
 
 impl<'info> RetryMilestone<'info> {
-    pub fn retry_milestone(&mut self, task_id: u16, bumps: &RetryMilestoneBumps) -> Result<()> {
+    pub fn retry_milestone(&mut self, task_id: u16, bumps: RetryMilestoneBumps) -> Result<()> {
         let clock = Clock::get()?;
         let current_time = clock.unix_timestamp;
         

@@ -85,7 +85,7 @@ impl<'info> CreateMilestone<'info> {
         &mut self,
         args: CreateMilestoneArgs,
         task_id: u16,
-        bumps: &CreateMilestoneBumps,
+        bumps: CreateMilestoneBumps,
     ) -> Result<()> {
         let clock = Clock::get()?;
         let current_time = clock.unix_timestamp;
@@ -112,7 +112,7 @@ impl<'info> CreateMilestone<'info> {
             voting_end_time: deadline,
             vote_against_weight: 0,
             vote_for_weight: 0,
-            bump: self.milestone.bump,
+            bump: bumps.milestone,
         });
 
         self.user.last_active_time = clock.unix_timestamp;

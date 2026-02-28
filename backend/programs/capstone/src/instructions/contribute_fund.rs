@@ -43,7 +43,7 @@ pub struct ContributeFund<'info> {
 }
 
 impl<'info> ContributeFund<'info> {
-    pub fn contribute_fund(&mut self, amount: u64) -> Result<()> {
+    pub fn contribute_fund(&mut self, amount: u64, bumps: ContributeFundBumps) -> Result<()> {
         require!(amount > 0, Error::ZeroAmount);
 
         require!(
@@ -74,7 +74,7 @@ impl<'info> ContributeFund<'info> {
             self.contribution.funder = self.funder.key();
             self.contribution.project = self.project.key();
             self.contribution.refunded = false;
-            self.contribution.bump = self.contribution.bump;
+            self.contribution.bump = bumps.contribution;
 
             self.project.funder_count = self
                 .project
