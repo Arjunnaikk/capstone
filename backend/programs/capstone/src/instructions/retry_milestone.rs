@@ -76,7 +76,12 @@ impl<'info> RetryMilestone<'info> {
     pub fn retry_milestone(&mut self, task_id: u16, bumps: &RetryMilestoneBumps) -> Result<()> {
         let clock = Clock::get()?;
         let current_time = clock.unix_timestamp;
-
+        
+        require!(
+            self.project.project_state != ProjectState::Failed,
+            Error::ProjectExpired
+        );
+        
         require!(
             self.milestone.milestone_status == MilestoneState::Disapproved,
             Error::NotDisapproved
@@ -102,7 +107,7 @@ impl<'info> RetryMilestone<'info> {
         self.milestone.milestone_status = MilestoneState::Voting;
 
         self.user.last_active_time = clock.unix_timestamp;
-        self.user.milestones_posted = self.user.milestones_posted.checked_add(1).unwrap();
+        
         let (compiled_tx, _) = compile_transaction(
             vec![Instruction {
                 program_id: crate::ID,
