@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-pub const CONTRIBUTION_SEED: &[u8] = b"contribution";
+pub const CONTRIBUTION_SEED: &[u8] = b"CONTRIBUTION";
 
 #[account]
 #[derive(InitSpace)]

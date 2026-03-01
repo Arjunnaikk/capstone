@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-pub const MILESTONE_SEED: &[u8] = b"PROJECT_MILESTONE";
+pub const MILESTONE_SEED: &[u8] = b"MILESTONE";
 
 #[account]
 #[derive(InitSpace, Debug)]

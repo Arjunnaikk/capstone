@@ -18,7 +18,7 @@ pub struct ContributeFund<'info> {
 
     #[account(
         mut,
-        seeds = [PROJECT_SEED,project.project_name.as_bytes(), project.project_authority.as_ref()],
+        seeds = [PROJECT_SEED, project.project_name.as_bytes(), project.project_authority.as_ref()],
         bump = project.bump
     )]
     pub project: Account<'info, Project>,
