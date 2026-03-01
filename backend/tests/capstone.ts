@@ -946,7 +946,7 @@ describe("capstone", () => {
       .voteOnMilestone(false)
       .accountsStrict({
         voter: contributor3.publicKey,
-        user: contributor1Pda,
+        user: contributor3Pda,
         project: project2Pda,
         milestone: milestone1Pda,
         contribution: contribution32Pda,
@@ -987,7 +987,6 @@ describe("capstone", () => {
     // -----------------------
     // 5. Milestone 2
     // -----------------------
-
     const milestone2Type = { development: {} };
     const milestone2Claim = 1;
     taskId = getRandomId();
