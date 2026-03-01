@@ -4,9 +4,10 @@ import { Capstone } from "../target/types/capstone";
 import { PublicKey, Keypair, SystemProgram } from "@solana/web3.js";
 import { assert } from "chai";
 import fs from "fs";
+import { init, taskKey, taskQueueAuthorityKey } from "@helium/tuktuk-sdk";
 
 describe("capstone", () => {
-  const provider = anchor.AnchorProvider.env();
+  const provider = anchor.AnchorProvider.local("https://devnet.helius-rpc.com/?api-key=c5d32b63-b2f3-46b9-9535-0d5510769438");
   anchor.setProvider(provider);
 
   const program = anchor.workspace.capstone as Program<Capstone>;
@@ -37,20 +38,18 @@ describe("capstone", () => {
   }
 
   async function loadMoney() {
-    const payer = (provider.wallet as anchor.Wallet).payer;
-    await fundWallet(payer, admin.publicKey, 10);
-    await fundWallet(payer, user.publicKey, 10);
-    await fundWallet(payer, contributor1.publicKey, 10);
-    await fundWallet(payer, contributor2.publicKey, 10);
-    await fundWallet(payer, contributor3.publicKey, 10);
-    await fundWallet(payer, contributor4.publicKey, 10);
-    await fundWallet(payer, contributor5.publicKey, 10);
+    await fundWallet(admin, user.publicKey, 10);
+    await fundWallet(admin, contributor1.publicKey, 10);
+    await fundWallet(admin, contributor2.publicKey, 10);
+    await fundWallet(admin, contributor3.publicKey, 10);
+    await fundWallet(admin, contributor4.publicKey, 10);
+    await fundWallet(admin, contributor5.publicKey, 10);
   }
 
   const VAULT_SEED = "VAULT";
   const PROJECT_SEED = "PROJECT";
   const CONTRIBUTION_SEED = "CONTRIBUTION";
-  const MILESTONE_SEED = "CONTRIBUTION";
+  const MILESTONE_SEED = "MILESTONE";
   const USER_SEED = "USER";
 
   let vaultPda: PublicKey;
@@ -75,8 +74,25 @@ describe("capstone", () => {
   const projectName1 = "MyTestProject1";
   const projectName2 = "MyTestProject1";
 
+  // tuktuk setup
+  const taskQueue = new anchor.web3.PublicKey(
+    "GnCH4xcCtPTqiHa3z76dPW4DX7toa6qCntNJVtwS5KZc"
+  );
+
+  const queueAuthority = anchor.web3.PublicKey.findProgramAddressSync(
+    [Buffer.from("queue_authority")],
+    program.programId
+  )[0];
+
+  const taskQueueAuthority = taskQueueAuthorityKey(
+    taskQueue,
+    queueAuthority
+  )[0];
+
+  console.log("queueAuthority: ", queueAuthority);
+
   before(async () => {
-    await loadMoney();
+    // await loadMoney();
 
     // derive vault PDA
     [vaultPda, vaultBump] = PublicKey.findProgramAddressSync(
@@ -256,7 +272,7 @@ describe("capstone", () => {
 
   it("Creates a project successfully", async () => {
     const milestoneCount = 3;
-    const targetAmount = new anchor.BN(5 * anchor.web3.LAMPORTS_PER_SOL);
+    const targetAmount = new anchor.BN(0.003 * anchor.web3.LAMPORTS_PER_SOL);
     const deadline = new anchor.BN(Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60);
 
     const beforeUser = await program.account.user.fetch(userPda);
@@ -289,7 +305,7 @@ describe("capstone", () => {
   });
 
   it("Allows a user to contribute for the first time", async () => {
-    const amount = new anchor.BN(1 * anchor.web3.LAMPORTS_PER_SOL);
+    const amount = new anchor.BN(0.001 * anchor.web3.LAMPORTS_PER_SOL);
 
     const beforeProject = await program.account.project.fetch(project1Pda);
     const beforeUser = await program.account.user.fetch(contributor1Pda);
@@ -323,7 +339,7 @@ describe("capstone", () => {
   it("Aggregates contribution if same user contributes again", async () => {
 
     const amount = new anchor.BN(
-      2 * anchor.web3.LAMPORTS_PER_SOL
+      0.001 * anchor.web3.LAMPORTS_PER_SOL
     );
 
     const beforeProject =
@@ -363,7 +379,7 @@ describe("capstone", () => {
   });
 
   it("Moves project to Development once target is reached", async () => {
-    const amount = new anchor.BN(3 * anchor.web3.LAMPORTS_PER_SOL);
+    const amount = new anchor.BN(0.001 * anchor.web3.LAMPORTS_PER_SOL);
 
     await program.methods
       .contributeFund(amount)
@@ -383,6 +399,98 @@ describe("capstone", () => {
 
     assert.ok(
       updatedProject.projectState.development !== undefined
+    );
+  });
+
+  it("Creates a milestone successfully", async () => {
+
+    const milestoneType = { design: {} };
+    const milestoneClaim = 1; 
+    let tuktukProgram = await init(provider);
+    const taskId = 37;
+
+    const [milestonePda, milestoneBump] =
+      PublicKey.findProgramAddressSync(
+        [
+          Buffer.from(MILESTONE_SEED),
+          user.publicKey.toBuffer(),
+          project1Pda.toBuffer(),
+          Buffer.from([0]) 
+        ],
+        program.programId
+      );
+
+    const beforeUser = await program.account.user.fetch(userPda);
+
+    await program.methods
+      .createMilestone(
+        {
+          milestoneType,
+          milestoneClaim
+        },
+        taskId
+      )
+      .accountsStrict({
+        milestoneAuthority: user.publicKey,
+        milestone: milestonePda,
+        vault: vaultPda,
+        project: project1Pda,
+        user: userPda,
+        taskQueue: taskQueue,
+        taskQueueAuthority: taskQueueAuthority,
+        task: taskKey(taskQueue, taskId)[0],
+        queueAuthority: queueAuthority,
+        systemProgram: SystemProgram.programId,
+        tuktukProgram: tuktukProgram.programId,
+      })
+      .signers([user])
+      .rpc({
+        skipPreflight: true
+      });
+
+    const milestoneAccount =
+      await program.account.milestone.fetch(milestonePda);
+
+    const afterUser =
+      await program.account.user.fetch(userPda);
+
+    assert.strictEqual(
+      milestoneAccount.projectId.toString(),
+      project1Pda.toString()
+    );
+
+    assert.strictEqual(
+      milestoneAccount.milestoneClaim,
+      milestoneClaim
+    );
+
+    assert.strictEqual(
+      milestoneAccount.attemptNumber,
+      0
+    );
+
+    assert.ok(
+      milestoneAccount.milestoneStatus.voting !== undefined
+    );
+
+    assert.strictEqual(
+      milestoneAccount.voteForWeight.toNumber(),
+      0
+    );
+
+    assert.strictEqual(
+      milestoneAccount.voteAgainstWeight.toNumber(),
+      0
+    );
+
+    assert.strictEqual(
+      milestoneAccount.bump,
+      milestoneBump
+    );
+
+    assert.strictEqual(
+      afterUser.milestonesPosted.toNumber(),
+      beforeUser.milestonesPosted.toNumber() + 1
     );
   });
 });

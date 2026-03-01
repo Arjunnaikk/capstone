@@ -6,7 +6,7 @@ mod errors;
 
 use instructions::*;
 
-declare_id!("3fk3PSD454iVm83yGsWtMo3xrwwV8MAUtSMhYPvimzTo");
+declare_id!("GjT6mbYqVLYwgixai3XZGxi783VqbWHN6YDbLVbdrZLq");
 
 #[program]
 pub mod capstone {
