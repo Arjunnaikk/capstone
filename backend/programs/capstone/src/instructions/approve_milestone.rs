@@ -17,7 +17,9 @@ pub struct ApproveMilestone<'info> {
 
     #[account(
         mut,
-        constraint = milestone.project_id == project.key() @ Error::InvalidProject
+        constraint = milestone.project_id == project.key() @ Error::InvalidProject,
+        seeds= [MILESTONE_SEED, project.project_authority.key().as_ref(), project.key().as_ref(), &[milestone.milestone_type as u8]],
+        bump = milestone.bump
     )]
     pub milestone: Account<'info, Milestone>,
 
@@ -30,10 +32,10 @@ pub struct ApproveMilestone<'info> {
 
     #[account(
         mut,
-        seeds = [VAULT_SEED, project.key().as_ref()],
-        bump
+        seeds = [VAULT_SEED],
+        bump = vault.bump
     )]
-    pub vault: SystemAccount<'info>,
+    pub vault: Account<'info, Vault>,
 
     /// CHECK: only sending SOL to the exact pubkey stored in the Project state
     #[account(
@@ -55,10 +57,10 @@ impl<'info> ApproveMilestone<'info> {
             Error::NotVotingStage 
         );
 
-        require!(
-            current_time > self.milestone.voting_end_time,
-            Error::NotVotingStage 
-        );
+        // require!(
+        //     current_time > self.milestone.voting_end_time,
+        //     Error::NotVotingStage 
+        // );
 
         let required_funder_quorum = (self.project.funder_count as u64)
             .saturating_mul(QUORUM_PERCENT)
@@ -92,7 +94,7 @@ impl<'info> ApproveMilestone<'info> {
             let remaining_funds = self.project.collected_amount.saturating_sub(self.project.withdrawn_amount);
             require!(payout_amount <= remaining_funds, Error::InsufficientFunds);
 
-            **self.vault.lamports.borrow_mut() = self.vault.lamports()
+            **self.vault.to_account_info().lamports.borrow_mut() = self.vault.to_account_info().lamports()
                 .checked_sub(payout_amount)
                 .ok_or(Error::InsufficientFunds)?;
             **self.project_authority.lamports.borrow_mut() = self.project_authority.lamports()

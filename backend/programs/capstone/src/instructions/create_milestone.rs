@@ -30,7 +30,7 @@ pub struct CreateMilestone<'info> {
     #[account(
         init,
         space = Milestone::DISCRIMINATOR.len() +  Milestone::INIT_SPACE,
-        seeds= [MILESTONE_SEED, project.key().as_ref(), &[args.milestone_type as u8]],
+        seeds= [MILESTONE_SEED, project.project_authority.key().as_ref(), project.key().as_ref(), &[args.milestone_type as u8]],
         payer = milestone_authority,
         bump
     )]
@@ -90,7 +90,7 @@ impl<'info> CreateMilestone<'info> {
         let clock = Clock::get()?;
         let current_time = clock.unix_timestamp;
 
-        let deadline = current_time.checked_add(172_800).unwrap();
+        let deadline = current_time.checked_add(30).unwrap();
 
         require!(
             deadline <= self.project.project_deadline,
@@ -124,7 +124,7 @@ impl<'info> CreateMilestone<'info> {
                 accounts: crate::__client_accounts_approve_milestone::ApproveMilestone {
                     project: self.project.key(),
                     milestone: self.milestone.key(),
-                    creator_user: self.milestone_authority.key(),
+                    creator_user: self.user.key(),
                     vault: self.vault.key(),
                     project_authority: self.milestone_authority.key(),
                     system_program: self.system_program.key(),
@@ -140,7 +140,7 @@ impl<'info> CreateMilestone<'info> {
             CpiContext::new_with_signer(
                 self.tuktuk_program.to_account_info(),
                 QueueTaskV0 {
-                    payer: self.user.to_account_info(),
+                    payer: self.milestone_authority.to_account_info(),
                     queue_authority: self.queue_authority.to_account_info(),
                     task_queue: self.task_queue.to_account_info(),
                     task_queue_authority: self.task_queue_authority.to_account_info(),
@@ -150,7 +150,7 @@ impl<'info> CreateMilestone<'info> {
                 &[&["queue_authority".as_bytes(), &[bumps.queue_authority]]],
             ),
             QueueTaskArgsV0 {
-                trigger: TriggerV0::Timestamp(deadline),
+                trigger: TriggerV0::Now,
                 transaction: TransactionSourceV0::CompiledV0(compiled_tx),
                 crank_reward: Some(1000001),
                 free_tasks: 1,

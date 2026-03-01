@@ -17,22 +17,14 @@ pub struct ClaimRefund<'info> {
 
     #[account(
         mut,
-        seeds = [
-            PROJECT_SEED,
-            project.project_name.as_bytes(),
-            project.project_authority.as_ref()
-        ],
+        seeds = [PROJECT_SEED, project.project_name.as_bytes(), project.project_authority.as_ref()],
         bump = project.bump
     )]
     pub project: Account<'info, Project>,
 
     #[account(
         mut,
-        seeds = [
-            CONTRIBUTION_SEED,
-            funder.key().as_ref(),
-            project.key().as_ref()
-        ],
+        seeds = [CONTRIBUTION_SEED, funder.key().as_ref(), project.key().as_ref()],
         bump = contribution.bump,
         has_one = funder,
         has_one = project,

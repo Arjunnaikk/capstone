@@ -31,18 +31,16 @@ pub struct VoteMilestone<'info> {
     pub user: Account<'info, User>,
 
     #[account(
-        seeds = [
-            PROJECT_SEED,
-            project.project_name.as_bytes(),
-            project.project_authority.as_ref()
-        ],
+        seeds = [PROJECT_SEED, project.project_name.as_bytes(),project.project_authority.as_ref()],
         bump = project.bump
     )]
     pub project: Account<'info, Project>,
 
     #[account(
         mut,
-        constraint = milestone.project_id == project.key() @ Error::InvalidProject
+        constraint = milestone.project_id == project.key() @ Error::InvalidProject,
+        seeds= [MILESTONE_SEED, project.project_authority.key().as_ref(), project.key().as_ref(), &[milestone.milestone_type as u8]],
+        bump = milestone.bump
     )]
     pub milestone: Account<'info, Milestone>,
 
