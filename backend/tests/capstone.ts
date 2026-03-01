@@ -534,9 +534,9 @@ describe("capstone", () => {
   });
 
   it("Full success lifecycle simulation", async () => {
-    const targetAmount = new anchor.BN(5 * anchor.web3.LAMPORTS_PER_SOL);
+    const targetAmount = new anchor.BN(0.05 * anchor.web3.LAMPORTS_PER_SOL);
     const deadline = new anchor.BN(Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60);
-    const amount = new anchor.BN(1 * anchor.web3.LAMPORTS_PER_SOL);
+    const amount = new anchor.BN(0.01 * anchor.web3.LAMPORTS_PER_SOL);
 
     await program.methods
       .createProject({
@@ -574,7 +574,6 @@ describe("capstone", () => {
       .rpc();
     console.log("Contributor 1 has contributed");
 
-
     await program.methods
       .contributeFund(amount)
       .accountsStrict({
@@ -588,7 +587,6 @@ describe("capstone", () => {
       .signers([contributor2])
       .rpc();
     console.log("Contributor 2 has contributed");
-
 
     await program.methods
       .contributeFund(amount)
@@ -605,7 +603,6 @@ describe("capstone", () => {
 
     console.log("Contributor 3 has contributed");
 
-
     await program.methods
       .contributeFund(amount)
       .accountsStrict({
@@ -620,7 +617,6 @@ describe("capstone", () => {
       .rpc();
 
     console.log("Contributor 4 has contributed");
-
 
     await program.methods
       .contributeFund(amount)
@@ -637,14 +633,13 @@ describe("capstone", () => {
 
     console.log("Contributor 5 has contributed");
 
-
     let tuktukProgram = await init(provider);
 
     // -----------------------
     // 4. Milestone 1
     // -----------------------
     const milestone1Type = { design: {} };
-    const milestone1Claim = 1;
+    const milestone1Claim = 0.01;
     let taskId = getRandomId();
 
     const [milestone1Pda] =
@@ -686,7 +681,6 @@ describe("capstone", () => {
 
     console.log("Milestone 1 is created");
 
-
     const [vote1Pda] = PublicKey.findProgramAddressSync(
       [
         Buffer.from(VOTE_SEED),
@@ -695,6 +689,7 @@ describe("capstone", () => {
       ],
       program.programId
     );
+
     const [vote2Pda] = PublicKey.findProgramAddressSync(
       [
         Buffer.from(VOTE_SEED),
@@ -703,6 +698,7 @@ describe("capstone", () => {
       ],
       program.programId
     );
+
     const [vote3Pda] = PublicKey.findProgramAddressSync(
       [
         Buffer.from(VOTE_SEED),
@@ -711,6 +707,7 @@ describe("capstone", () => {
       ],
       program.programId
     );
+
     const [vote4Pda] = PublicKey.findProgramAddressSync(
       [
         Buffer.from(VOTE_SEED),
@@ -745,7 +742,6 @@ describe("capstone", () => {
 
     console.log("Contributor 1 has voted");
 
-
     await program.methods
       .voteOnMilestone(true)
       .accountsStrict({
@@ -761,7 +757,6 @@ describe("capstone", () => {
       .rpc();
 
     console.log("Contributor 2 has voted");
-
 
     await program.methods
       .voteOnMilestone(false)
@@ -779,7 +774,6 @@ describe("capstone", () => {
 
     console.log("Contributor 3 has voted");
 
-
     await program.methods
       .voteOnMilestone(true)
       .accountsStrict({
@@ -795,7 +789,6 @@ describe("capstone", () => {
       .rpc();
 
     console.log("Contributor 4 has voted");
-
 
     await program.methods
       .voteOnMilestone(false)
@@ -813,12 +806,13 @@ describe("capstone", () => {
 
     console.log("Contributor 5 has voted");
 
+    await sleep(120 * 1000);
 
     // -----------------------
     // 5. Milestone 2
     // -----------------------
     const milestone2Type = { development: {} };
-    const milestone2Claim = 1;
+    const milestone2Claim = 0.1;
     taskId = getRandomId();
 
     const [milestone2Pda] =
@@ -858,8 +852,7 @@ describe("capstone", () => {
         skipPreflight: true
       });
 
-    console.log("milestone 2 is created");
-
+    console.log("Milestone 2 is created");
 
     const [vote12Pda] = PublicKey.findProgramAddressSync(
       [
@@ -869,6 +862,7 @@ describe("capstone", () => {
       ],
       program.programId
     );
+
     const [vote22Pda] = PublicKey.findProgramAddressSync(
       [
         Buffer.from(VOTE_SEED),
@@ -877,6 +871,7 @@ describe("capstone", () => {
       ],
       program.programId
     );
+
     const [vote32Pda] = PublicKey.findProgramAddressSync(
       [
         Buffer.from(VOTE_SEED),
@@ -885,6 +880,7 @@ describe("capstone", () => {
       ],
       program.programId
     );
+
     const [vote42Pda] = PublicKey.findProgramAddressSync(
       [
         Buffer.from(VOTE_SEED),
@@ -919,7 +915,6 @@ describe("capstone", () => {
 
     console.log("Contributor 1 has voted");
 
-
     await program.methods
       .voteOnMilestone(true)
       .accountsStrict({
@@ -935,7 +930,6 @@ describe("capstone", () => {
       .rpc();
 
     console.log("Contributor 2 has voted");
-
 
     await program.methods
       .voteOnMilestone(false)
@@ -953,7 +947,6 @@ describe("capstone", () => {
 
     console.log("Contributor 3 has voted");
 
-
     await program.methods
       .voteOnMilestone(true)
       .accountsStrict({
@@ -969,7 +962,6 @@ describe("capstone", () => {
       .rpc();
 
     console.log("Contributor 4 has voted");
-
 
     await program.methods
       .voteOnMilestone(false)
@@ -987,12 +979,13 @@ describe("capstone", () => {
 
     console.log("Contributor 5 has voted");
 
+    await sleep(120 * 1000);
 
     // -----------------------
     // 6. Milestone 3
     // -----------------------
     const milestone3Type = { testing: {} };
-    const milestone3Claim = 1;
+    const milestone3Claim = 0.01;
     taskId = getRandomId();
 
     const [milestone3Pda] =
@@ -1032,7 +1025,7 @@ describe("capstone", () => {
         skipPreflight: true
       });
 
-    console.log("milestone 3 is created");
+    console.log("Milestone 3 is created");
 
 
     const [vote13Pda] = PublicKey.findProgramAddressSync(
@@ -1043,6 +1036,7 @@ describe("capstone", () => {
       ],
       program.programId
     );
+
     const [vote23Pda] = PublicKey.findProgramAddressSync(
       [
         Buffer.from(VOTE_SEED),
@@ -1051,6 +1045,7 @@ describe("capstone", () => {
       ],
       program.programId
     );
+
     const [vote33Pda] = PublicKey.findProgramAddressSync(
       [
         Buffer.from(VOTE_SEED),
@@ -1059,6 +1054,7 @@ describe("capstone", () => {
       ],
       program.programId
     );
+
     const [vote43Pda] = PublicKey.findProgramAddressSync(
       [
         Buffer.from(VOTE_SEED),
@@ -1093,7 +1089,6 @@ describe("capstone", () => {
 
     console.log("Contributor 1 has voted");
 
-
     await program.methods
       .voteOnMilestone(true)
       .accountsStrict({
@@ -1109,7 +1104,6 @@ describe("capstone", () => {
       .rpc();
 
     console.log("Contributor 2 has voted");
-
 
     await program.methods
       .voteOnMilestone(false)
@@ -1127,7 +1121,6 @@ describe("capstone", () => {
 
     console.log("Contributor 3 has voted");
 
-
     await program.methods
       .voteOnMilestone(true)
       .accountsStrict({
@@ -1143,7 +1136,6 @@ describe("capstone", () => {
       .rpc();
 
     console.log("Contributor 4 has voted");
-
 
     await program.methods
       .voteOnMilestone(false)
@@ -1161,12 +1153,13 @@ describe("capstone", () => {
 
     console.log("Contributor 5 has voted");
 
+    await sleep(120 * 1000);
 
     //-----------------------
     // 7. Milestone 4
     // -----------------------
     const milestone4Type = { delivery: {} };
-    const milestone4Claim = 2;
+    const milestone4Claim = 0.02;
     taskId = getRandomId();
 
     const [milestone4Pda] =
@@ -1206,7 +1199,7 @@ describe("capstone", () => {
         skipPreflight: true
       });
 
-    console.log("milestone 4 is created");
+    console.log("Milestone 4 is created");
 
 
     const [vote14Pda] = PublicKey.findProgramAddressSync(
@@ -1217,6 +1210,7 @@ describe("capstone", () => {
       ],
       program.programId
     );
+
     const [vote24Pda] = PublicKey.findProgramAddressSync(
       [
         Buffer.from(VOTE_SEED),
@@ -1225,6 +1219,7 @@ describe("capstone", () => {
       ],
       program.programId
     );
+
     const [vote34Pda] = PublicKey.findProgramAddressSync(
       [
         Buffer.from(VOTE_SEED),
@@ -1233,6 +1228,7 @@ describe("capstone", () => {
       ],
       program.programId
     );
+
     const [vote44Pda] = PublicKey.findProgramAddressSync(
       [
         Buffer.from(VOTE_SEED),
@@ -1268,7 +1264,7 @@ describe("capstone", () => {
     console.log("Contributor 1 has voted");
 
     await program.methods
-      .voteOnMilestone(true)
+      .voteOnMilestone(false)
       .accountsStrict({
         voter: contributor2.publicKey,
         user: contributor2Pda,
@@ -1331,11 +1327,11 @@ describe("capstone", () => {
 
     console.log("Contributor 5 has voted");
 
-    await sleep(60 * 1000);
+    await sleep(120 * 1000);
 
-    console.log("Waiting for crank to resolve the final retried milestone...");
-
-   // retry milestone
+    //-----------------------
+    // 8. Retry Milestone
+    // -----------------------
     await program.methods
       .retryMilestone(taskId)
       .accountsStrict({
@@ -1354,9 +1350,7 @@ describe("capstone", () => {
       .signers([user])
       .rpc();
 
-    console.log("retrying milestone...")
-
-    await sleep(60 * 1000);
+    console.log("Retrying milestone...")
 
     await program.methods
       .voteOnMilestone(true)
@@ -1392,7 +1386,6 @@ describe("capstone", () => {
 
     console.log("Contributor 2 has voted");
 
-
     await program.methods
       .voteOnMilestone(false)
       .accountsStrict({
@@ -1408,7 +1401,6 @@ describe("capstone", () => {
       .rpc();
 
     console.log("Contributor 3 has voted");
-
 
     await program.methods
       .voteOnMilestone(true)
@@ -1426,7 +1418,6 @@ describe("capstone", () => {
 
     console.log("Contributor 4 has voted");
 
-
     await program.methods
       .voteOnMilestone(true)
       .accountsStrict({
@@ -1443,9 +1434,9 @@ describe("capstone", () => {
     
     console.log("Contributor 5 has voted");
 
-
     console.log("Waiting for crank to resolve the final retried milestone...");
-    await sleep(70 * 1000);
+
+    await sleep(120 * 1000);
 
     const finalProject = await program.account.project.fetch(project2Pda);
     const finalMilestone4 = await program.account.milestone.fetch(milestone4Pda);
