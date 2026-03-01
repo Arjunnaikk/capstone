@@ -90,7 +90,7 @@ impl<'info> CreateMilestone<'info> {
         let clock = Clock::get()?;
         let current_time = clock.unix_timestamp;
 
-        let deadline = current_time.checked_add(30).unwrap();
+        let deadline = current_time.checked_add(172_800).unwrap();
 
         require!(
             deadline <= self.project.project_deadline,
@@ -150,7 +150,7 @@ impl<'info> CreateMilestone<'info> {
                 &[&["queue_authority".as_bytes(), &[bumps.queue_authority]]],
             ),
             QueueTaskArgsV0 {
-                trigger: TriggerV0::Now,
+                trigger: TriggerV0::Timestamp(deadline),
                 transaction: TransactionSourceV0::CompiledV0(compiled_tx),
                 crank_reward: Some(1000001),
                 free_tasks: 1,

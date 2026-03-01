@@ -57,10 +57,10 @@ impl<'info> ApproveMilestone<'info> {
             Error::NotVotingStage 
         );
 
-        // require!(
-        //     current_time > self.milestone.voting_end_time,
-        //     Error::NotVotingStage 
-        // );
+        require!(
+            current_time > self.milestone.voting_end_time,
+            Error::NotVotingStage 
+        );
 
         let required_funder_quorum = (self.project.funder_count as u64)
             .saturating_mul(QUORUM_PERCENT)

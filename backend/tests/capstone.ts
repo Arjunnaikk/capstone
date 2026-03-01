@@ -51,6 +51,7 @@ describe("capstone", () => {
   const CONTRIBUTION_SEED = "CONTRIBUTION";
   const MILESTONE_SEED = "MILESTONE";
   const USER_SEED = "USER";
+  const VOTE_SEED = "VOTE";
 
   let vaultPda: PublicKey;
   let vaultBump: number;
@@ -491,6 +492,211 @@ describe("capstone", () => {
     assert.strictEqual(
       afterUser.milestonesPosted.toNumber(),
       beforeUser.milestonesPosted.toNumber() + 1
+    );
+  });
+
+  it("Allows a contributor to vote FOR a milestone", async () => {
+    const decision = true;
+    const [milestonePda] =
+      PublicKey.findProgramAddressSync(
+        [
+          Buffer.from(MILESTONE_SEED),
+          user.publicKey.toBuffer(),
+          project1Pda.toBuffer(),
+          Buffer.from([0])
+        ],
+        program.programId
+      );
+    
+    const [votePda] = PublicKey.findProgramAddressSync(
+      [
+        Buffer.from(VOTE_SEED),
+        milestonePda.toBuffer(),
+        contributor1.publicKey.toBuffer(),
+      ],
+      program.programId
+    );
+
+    const beforeMilestone =
+      await program.account.milestone.fetch(milestonePda);
+
+    const beforeUser =
+      await program.account.user.fetch(contributor1Pda);
+
+    const contributionAccount =
+      await program.account.contribution.fetch(contribution1Pda);
+
+    await program.methods
+      .voteOnMilestone(decision)
+      .accountsStrict({
+        voter: contributor1.publicKey,
+        user: contributor1Pda,
+        project: project1Pda,
+        milestone: milestonePda,
+        contribution: contribution1Pda,
+        vote: votePda,
+        systemProgram: SystemProgram.programId,
+      })
+      .signers([contributor1])
+      .rpc();
+
+    const voteAccount =
+      await program.account.vote.fetch(votePda);
+
+    const afterMilestone =
+      await program.account.milestone.fetch(milestonePda);
+
+    const afterUser =
+      await program.account.user.fetch(contributor1Pda);
+
+    const tokens = contributionAccount.amount.toNumber();
+    const expectedBase = Math.floor(Math.sqrt(tokens));
+    const expectedWeight = Math.min(expectedBase * 1, 5000);
+
+    assert.strictEqual(voteAccount.decision, true);
+    assert.strictEqual(voteAccount.weight.toNumber(), expectedWeight);
+
+    assert.strictEqual(
+      afterMilestone.voteForWeight.toNumber(),
+      (beforeMilestone.voteForWeight.toNumber() + expectedWeight)
+    );
+
+    assert.strictEqual(
+      afterMilestone.votesCasted,
+      beforeMilestone.votesCasted + 1
+    );
+
+    assert.strictEqual(
+      afterUser.totalVotes.toNumber(),
+      beforeUser.totalVotes.toNumber() + 1
+    );
+  });
+
+  it("Fails if a non-funder tries to vote", async () => {
+    const decision = true;
+    const [milestonePda] =
+      PublicKey.findProgramAddressSync(
+        [
+          Buffer.from(MILESTONE_SEED),
+          user.publicKey.toBuffer(),
+          project1Pda.toBuffer(),
+          Buffer.from([0])
+        ],
+        program.programId
+      );
+
+    const [fakeContributionPda] =
+      PublicKey.findProgramAddressSync(
+        [
+          Buffer.from(CONTRIBUTION_SEED),
+          contributor2.publicKey.toBuffer(),
+          project1Pda.toBuffer(),
+        ],
+        program.programId
+      );
+
+    const [votePda] =
+      PublicKey.findProgramAddressSync(
+        [
+          Buffer.from(VOTE_SEED),
+          milestonePda.toBuffer(),
+          contributor2.publicKey.toBuffer(),
+        ],
+        program.programId
+      );
+
+    const [userPda] =
+      PublicKey.findProgramAddressSync(
+        [
+          Buffer.from(USER_SEED),
+          contributor2.publicKey.toBuffer(),
+        ],
+        program.programId
+      );
+
+    try {
+      await program.methods
+        .voteOnMilestone(decision)
+        .accountsStrict({
+          voter: contributor2.publicKey,
+          user: userPda,
+          project: project1Pda,
+          milestone: milestonePda,
+          contribution: fakeContributionPda, 
+          vote: votePda,
+          systemProgram: SystemProgram.programId,
+        })
+        .signers([contributor2])
+        .rpc();
+
+      assert.fail("Non-funder should not be allowed to vote");
+    } catch (err: any) {
+      assert.exists(err);
+    }
+  });
+
+  it("Retries a disapproved milestone successfully", async () => {
+    const taskId = 99;
+    let tuktukProgram = await init(provider);
+
+    const [milestonePda, milestoneBump] =
+      PublicKey.findProgramAddressSync(
+        [
+          Buffer.from(MILESTONE_SEED),
+          user.publicKey.toBuffer(),
+          project1Pda.toBuffer(),
+          Buffer.from([0])
+        ],
+        program.programId
+      );
+
+    const beforeMilestone =
+      await program.account.milestone.fetch(milestonePda);
+
+    const beforeUser =
+      await program.account.user.fetch(userPda);
+
+    assert.ok(beforeMilestone.milestoneStatus.disapproved !== undefined);
+
+    await program.methods
+      .retryMilestone(taskId)
+      .accountsStrict({
+        milestoneAuthority: user.publicKey,
+        project: project1Pda,
+        milestone: milestonePda,
+        user: userPda,
+        vault: vaultPda,
+        taskQueue: taskQueue,
+        taskQueueAuthority: taskQueueAuthority,
+        task: taskKey(taskQueue, taskId)[0],
+        queueAuthority: queueAuthority,
+        systemProgram: SystemProgram.programId,
+        tuktukProgram: tuktukProgram.programId,
+      })
+      .signers([user])
+      .rpc();
+
+    const afterMilestone =
+      await program.account.milestone.fetch(milestonePda);
+
+    const afterUser =
+      await program.account.user.fetch(userPda);
+
+    assert.ok(afterMilestone.milestoneStatus.voting !== undefined);
+
+    assert.strictEqual(afterMilestone.voteForWeight.toNumber(), 0);
+    assert.strictEqual(afterMilestone.voteAgainstWeight.toNumber(), 0);
+    assert.strictEqual(afterMilestone.votesCasted, 0);
+    assert.strictEqual(afterMilestone.amountVoted.toNumber(), 0);
+
+    assert.strictEqual(
+      afterMilestone.attemptNumber,
+      beforeMilestone.attemptNumber + 1
+    );
+
+    assert.isAbove(
+      afterUser.lastActiveTime.toNumber(),
+      beforeUser.lastActiveTime.toNumber()
     );
   });
 });

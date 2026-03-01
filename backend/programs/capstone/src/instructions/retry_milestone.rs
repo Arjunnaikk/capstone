@@ -13,7 +13,7 @@ use tuktuk_program::{
     TransactionSourceV0,
 };
 
-const VOTING_WINDOW_SECONDS: i64 = 172_800;
+const VOTING_WINDOW_SECONDS: i64 = 86_400; 
 const MAX_ATTEMPTS: u8 = 3;
 
 #[derive(Accounts)]
@@ -142,7 +142,7 @@ impl<'info> RetryMilestone<'info> {
                 &[&["queue_authority".as_bytes(), &[bumps.queue_authority]]],
             ),
             QueueTaskArgsV0 {
-                trigger: TriggerV0::Now,
+                trigger: TriggerV0::Timestamp(new_voting_deadline),
                 transaction: TransactionSourceV0::CompiledV0(compiled_tx),
                 crank_reward: Some(1000001),
                 free_tasks: 1,
