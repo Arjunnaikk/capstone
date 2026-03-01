@@ -220,7 +220,7 @@ describe("capstone", () => {
 
   });
 
-  xit("Initializes the vault", async () => {
+  it("Initializes the vault", async () => {
     await program.methods
       .initialize()
       .accountsStrict({
@@ -237,7 +237,7 @@ describe("capstone", () => {
     assert.strictEqual(vaultAccount.bump, vaultBump);
   });
 
-  xit("Initializes a user account", async () => {
+  it("Initializes a user account", async () => {
     const beforeTs = Math.floor(Date.now() / 1000);
 
     await program.methods
@@ -258,7 +258,7 @@ describe("capstone", () => {
     assert.isAtLeast(userAccount.timeJoined.toNumber(), beforeTs, "joining time is not correct");
   });
 
-  xit("Initializes the contributor's user accounts", async () => {
+  it("Initializes the contributor's user accounts", async () => {
     await program.methods
       .initializeUser()
       .accountsStrict({
@@ -1315,7 +1315,6 @@ describe("capstone", () => {
 
     console.log("Contributor 4 has voted");
 
-
     await program.methods
       .voteOnMilestone(false)
       .accountsStrict({
@@ -1332,12 +1331,11 @@ describe("capstone", () => {
 
     console.log("Contributor 5 has voted");
 
-
     await sleep(60 * 1000);
 
     console.log("Waiting for crank to resolve the final retried milestone...");
 
-    // retry milestone
+   // retry milestone
     await program.methods
       .retryMilestone(taskId)
       .accountsStrict({
@@ -1358,6 +1356,8 @@ describe("capstone", () => {
 
     console.log("retrying milestone...")
 
+    await sleep(60 * 1000);
+
     await program.methods
       .voteOnMilestone(true)
       .accountsStrict({
@@ -1370,10 +1370,11 @@ describe("capstone", () => {
         systemProgram: SystemProgram.programId,
       })
       .signers([contributor1])
-      .rpc();
+      .rpc({
+        skipPreflight: true
+      });
 
     console.log("Contributor 1 has voted");
-
 
     await program.methods
       .voteOnMilestone(true)

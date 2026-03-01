@@ -54,9 +54,9 @@ pub struct VoteMilestone<'info> {
 
     #[account(
         init_if_needed,
-        space = 8 + Vote::INIT_SPACE,
-        seeds = [VOTE_SEED, milestone.key().as_ref(), voter.key().as_ref()],
         payer = voter,
+        space = Vote::DISCRIMINATOR.len() + Vote::INIT_SPACE,
+        seeds = [VOTE_SEED, milestone.key().as_ref(), voter.key().as_ref()],
         bump
     )]
     pub vote: Account<'info, Vote>,
