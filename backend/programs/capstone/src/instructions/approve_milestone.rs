@@ -81,7 +81,7 @@ impl<'info> ApproveMilestone<'info> {
             
             self.creator_user.milestones_cleared = self.creator_user.milestones_cleared.saturating_add(1);
          
-            if self.project.milestones_completed >= 5 {
+            if self.project.milestones_completed == self.project.milestone_count {
                 self.project.project_state = ProjectState::Completed;
                 self.creator_user.projects_succeed = self.creator_user.projects_succeed.saturating_add(1);
             }

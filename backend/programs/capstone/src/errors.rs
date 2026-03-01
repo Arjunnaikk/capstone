@@ -49,4 +49,7 @@ pub enum Error {
 
     #[msg("Invalid milestone count.")]
     InvalidMilestoneCount,
+    
+    #[msg("Vote has already been casted")]
+    AlreadyVoted
 }

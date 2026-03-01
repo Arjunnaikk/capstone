@@ -90,7 +90,7 @@ impl<'info> CreateMilestone<'info> {
         let clock = Clock::get()?;
         let current_time = clock.unix_timestamp;
 
-        let deadline = current_time.checked_add(172_800).unwrap();
+        let deadline = current_time.checked_add(60).unwrap();
 
         require!(
             deadline <= self.project.project_deadline,
@@ -104,7 +104,7 @@ impl<'info> CreateMilestone<'info> {
         self.milestone.set_inner(Milestone {
             project_id: self.project.key(),
             milestone_claim: args.milestone_claim,
-            attempt_number: 0,
+            attempt_number: 1,
             milestone_status: MilestoneState::Voting,
             milestone_type: args.milestone_type,
             votes_casted: 0,

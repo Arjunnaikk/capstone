@@ -10,5 +10,6 @@ pub struct Vote{
     pub milestone_id: Pubkey,
     pub decision: bool,
     pub weight: u64, 
+    pub attempt_count: u8,
     pub bump: u8
 }

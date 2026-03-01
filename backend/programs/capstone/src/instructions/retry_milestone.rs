@@ -13,7 +13,7 @@ use tuktuk_program::{
     TransactionSourceV0,
 };
 
-const VOTING_WINDOW_SECONDS: i64 = 86_400; 
+const VOTING_WINDOW_SECONDS: i64 = 60; 
 const MAX_ATTEMPTS: u8 = 3;
 
 #[derive(Accounts)]
@@ -90,7 +90,7 @@ impl<'info> RetryMilestone<'info> {
         );
 
         require!(
-            self.milestone.attempt_number < MAX_ATTEMPTS,
+            self.milestone.attempt_number <= MAX_ATTEMPTS,
             Error::MaxAttemptsReached
         );
 

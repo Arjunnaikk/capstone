@@ -3,7 +3,7 @@ use crate::{errors::Error, state::*};
 
 const MAX_BONUS: u64 = 9;
 const MAX_WEIGHT: u64 = 5_000;
-const HALF_LIFE: u64 = 100; 
+const HALF_LIFE: u64 = 100;
 
 pub fn integer_sqrt(n: u64) -> u64 {
     if n == 0 {
@@ -53,7 +53,7 @@ pub struct VoteMilestone<'info> {
     pub contribution: Account<'info, Contribution>,
 
     #[account(
-        init,
+        init_if_needed,
         space = 8 + Vote::INIT_SPACE,
         seeds = [VOTE_SEED, milestone.key().as_ref(), voter.key().as_ref()],
         payer = voter,
@@ -69,6 +69,15 @@ impl<'info> VoteMilestone<'info> {
         let clock = Clock::get()?;
         let current_time = clock.unix_timestamp;
 
+        let is_new_vote = self.vote.attempt_count == 0;
+
+        if !is_new_vote {
+            require!(
+                self.vote.attempt_count < self.milestone.attempt_number,
+                Error::AlreadyVoted 
+            );
+        }
+
         require!(
             self.milestone.milestone_status == MilestoneState::Voting,
             Error::NotVotingStage
@@ -79,15 +88,22 @@ impl<'info> VoteMilestone<'info> {
             Error::NotEnoughTimeLeft
         );
 
+        require!(
+            current_time <= self.milestone.voting_end_time,
+            Error::NotEnoughTimeLeft
+        );
+
         let tokens = self.contribution.amount;
         require!(tokens > 0, Error::ZeroAmount);
 
-
-        let failed_projects = self.user
+        let failed_projects = self
+            .user
             .projects_posted
             .saturating_sub(self.user.projects_succeed);
 
-        let raw_score = self.user.total_votes
+        let raw_score = self
+            .user
+            .total_votes
             .saturating_add(self.user.milestones_cleared.saturating_mul(5))
             .saturating_add(self.user.projects_succeed.saturating_mul(20));
 
@@ -134,23 +150,29 @@ impl<'info> VoteMilestone<'info> {
             milestone_id: self.milestone.key(),
             decision,
             weight: final_voting_weight,
+            attempt_count: self.milestone.attempt_number,
             bump: bumps.vote,
         });
 
         if decision {
-            self.milestone.vote_for_weight =
-                self.milestone.vote_for_weight
-                    .saturating_add(final_voting_weight);
+            self.milestone.vote_for_weight = self
+                .milestone
+                .vote_for_weight
+                .saturating_add(final_voting_weight);
         } else {
-            self.milestone.vote_against_weight =
-                self.milestone.vote_against_weight
-                    .saturating_add(final_voting_weight);
+            self.milestone.vote_against_weight = self
+                .milestone
+                .vote_against_weight
+                .saturating_add(final_voting_weight);
         }
 
         self.milestone.votes_casted = self.milestone.votes_casted.saturating_add(1);
+        self.milestone.amount_voted = self
+            .milestone
+            .amount_voted
+            .saturating_add(self.contribution.amount);
 
-        self.user.total_votes =
-            self.user.total_votes.saturating_add(1);
+        self.user.total_votes = self.user.total_votes.saturating_add(1);
 
         self.user.last_active_time = current_time;
 
