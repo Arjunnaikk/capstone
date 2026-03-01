@@ -46,6 +46,8 @@ impl<'info> CreateProject<'info> {
         let clock = Clock::get()?;
         require!(args.target_amount > 0, Error::ZeroAmount);
 
+        require!(args.deadline > clock.unix_timestamp, Error::InvalidDeadline);
+
         require!(
             args.milestone_count <= 5 && args.milestone_count > 0,
             Error::InvalidMilestoneCount

@@ -51,5 +51,8 @@ pub enum Error {
     InvalidMilestoneCount,
     
     #[msg("Vote has already been casted")]
-    AlreadyVoted
+    AlreadyVoted,
+
+    #[msg("Given deadline is invalid")]
+    InvalidDeadline
 }

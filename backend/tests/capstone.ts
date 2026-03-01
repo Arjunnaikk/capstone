@@ -18,6 +18,10 @@ describe("capstone", () => {
     return Keypair.fromSecretKey(Uint8Array.from(secret));
   }
 
+  function getRandomId(): number {
+    return Math.floor(Math.random() * 1000) + 1;
+  }
+
   const admin = loadWallet("./wallets/admin.json");
   const user = loadWallet("./wallets/user.json");
   const contributor1 = loadWallet("./wallets/contributor1.json");
@@ -36,6 +40,7 @@ describe("capstone", () => {
     );
     await provider.sendAndConfirm(tx, [from]);
   }
+
 
   async function loadMoney() {
     await fundWallet(admin, user.publicKey, 10);
@@ -67,6 +72,11 @@ describe("capstone", () => {
   let contribution3Pda: PublicKey;
   let contribution4Pda: PublicKey;
   let contribution5Pda: PublicKey;
+  let contribution12Pda: PublicKey;
+  let contribution22Pda: PublicKey;
+  let contribution32Pda: PublicKey;
+  let contribution42Pda: PublicKey;
+  let contribution52Pda: PublicKey;
   let project1Pda: PublicKey;
   let project2Pda: PublicKey;
   let project1Bump: number;
@@ -175,6 +185,31 @@ describe("capstone", () => {
 
     [contribution5Pda] = PublicKey.findProgramAddressSync(
       [Buffer.from(CONTRIBUTION_SEED), contributor5.publicKey.toBuffer(), project1Pda.toBuffer()],
+      program.programId
+    );
+
+    [contribution12Pda] = PublicKey.findProgramAddressSync(
+      [Buffer.from(CONTRIBUTION_SEED), contributor1.publicKey.toBuffer(), project2Pda.toBuffer()],
+      program.programId
+    );
+
+    [contribution22Pda] = PublicKey.findProgramAddressSync(
+      [Buffer.from(CONTRIBUTION_SEED), contributor2.publicKey.toBuffer(), project2Pda.toBuffer()],
+      program.programId
+    );
+
+    [contribution32Pda] = PublicKey.findProgramAddressSync(
+      [Buffer.from(CONTRIBUTION_SEED), contributor3.publicKey.toBuffer(), project2Pda.toBuffer()],
+      program.programId
+    );
+
+    [contribution42Pda] = PublicKey.findProgramAddressSync(
+      [Buffer.from(CONTRIBUTION_SEED), contributor4.publicKey.toBuffer(), project2Pda.toBuffer()],
+      program.programId
+    );
+
+    [contribution52Pda] = PublicKey.findProgramAddressSync(
+      [Buffer.from(CONTRIBUTION_SEED), contributor5.publicKey.toBuffer(), project2Pda.toBuffer()],
       program.programId
     );
 
@@ -495,8 +530,9 @@ describe("capstone", () => {
     );
   });
 
-  it("Allows a contributor to vote FOR a milestone", async () => {
+  it("Allows a contributor to vote on a milestone", async () => {
     const decision = true;
+
     const [milestonePda] =
       PublicKey.findProgramAddressSync(
         [
@@ -636,10 +672,10 @@ describe("capstone", () => {
   });
 
   it("Retries a disapproved milestone successfully", async () => {
-    const taskId = 99;
+    const taskId = 78;
     let tuktukProgram = await init(provider);
 
-    const [milestonePda, milestoneBump] =
+    const [milestonePda] =
       PublicKey.findProgramAddressSync(
         [
           Buffer.from(MILESTONE_SEED),
@@ -698,5 +734,258 @@ describe("capstone", () => {
       afterUser.lastActiveTime.toNumber(),
       beforeUser.lastActiveTime.toNumber()
     );
+  });
+
+  it("Full SUCCESS lifecycle simulation", async () => {
+    const targetAmount = new anchor.BN(5 * anchor.web3.LAMPORTS_PER_SOL);
+    const deadline = new anchor.BN(Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60);
+    const amount = new anchor.BN(1* anchor.web3.LAMPORTS_PER_SOL);
+
+    await program.methods
+      .createProject({
+        projectName: projectName2,
+        milestoneCount: 4,
+        targetAmount: targetAmount,
+        deadline: deadline
+      })
+      .accountsStrict({
+        projectAuthority: user.publicKey,
+        project: project2Pda,
+        user: userPda,
+        systemProgram: SystemProgram.programId,
+      })
+      .signers([user])
+      .rpc();
+    
+    // -----------------------
+    // 3. Contributions
+    // -----------------------
+
+    await program.methods
+      .contributeFund(amount)
+      .accountsStrict({
+        funder: contributor1.publicKey,
+        vault: vaultPda,
+        project: project2Pda,
+        user: contributor1Pda,
+        contribution: contribution12Pda,
+        systemProgram: SystemProgram.programId,
+      })
+      .signers([contributor1])
+      .rpc();
+    
+    await program.methods
+      .contributeFund(amount)
+      .accountsStrict({
+        funder: contributor2.publicKey,
+        vault: vaultPda,
+        project: project2Pda,
+        user: contributor2Pda,
+        contribution: contribution22Pda,
+        systemProgram: SystemProgram.programId,
+      })
+      .signers([contributor2])
+      .rpc();
+    
+    await program.methods
+      .contributeFund(amount)
+      .accountsStrict({
+        funder: contributor3.publicKey,
+        vault: vaultPda,
+        project: project2Pda,
+        user: contributor3Pda,
+        contribution: contribution32Pda,
+        systemProgram: SystemProgram.programId,
+      })
+      .signers([contributor3])
+      .rpc();
+    
+    await program.methods
+      .contributeFund(amount)
+      .accountsStrict({
+        funder: contributor4.publicKey,
+        vault: vaultPda,
+        project: project2Pda,
+        user: contributor4Pda,
+        contribution: contribution42Pda,
+        systemProgram: SystemProgram.programId,
+      })
+      .signers([contributor4])
+      .rpc();
+    
+    await program.methods
+      .contributeFund(amount)
+      .accountsStrict({
+        funder: contributor5.publicKey,
+        vault: vaultPda,
+        project: project2Pda,
+        user: contributor5Pda,
+        contribution: contribution52Pda,
+        systemProgram: SystemProgram.programId,
+      })
+      .signers([contributor5])
+      .rpc();
+
+    let tuktukProgram = await init(provider);
+
+    // -----------------------
+    // 4. Milestone 1
+    // -----------------------
+    const milestone1Type = { design: {} };
+    const milestone1Claim = 1;
+    let taskId = getRandomId();
+
+    const [milestone1Pda] =
+      PublicKey.findProgramAddressSync(
+        [
+          Buffer.from(MILESTONE_SEED),
+          user.publicKey.toBuffer(),
+          project2Pda.toBuffer(),
+          Buffer.from([0])
+        ],
+        program.programId
+      );
+    
+    await program.methods
+      .createMilestone(
+        {
+          milestoneType: milestone1Type,
+         milestoneClaim: milestone1Claim
+        },
+        taskId
+      )
+      .accountsStrict({
+        milestoneAuthority: user.publicKey,
+        milestone: milestone1Pda,
+        vault: vaultPda,
+        project: project2Pda,
+        user: userPda,
+        taskQueue: taskQueue,
+        taskQueueAuthority: taskQueueAuthority,
+        task: taskKey(taskQueue, taskId)[0],
+        queueAuthority: queueAuthority,
+        systemProgram: SystemProgram.programId,
+        tuktukProgram: tuktukProgram.programId,
+      })
+      .signers([user])
+      .rpc({
+        skipPreflight: true
+      });
+    
+    const [vote1Pda] = PublicKey.findProgramAddressSync(
+      [
+        Buffer.from(VOTE_SEED),
+        milestone1Pda.toBuffer(),
+        contributor1.publicKey.toBuffer(),
+      ],
+      program.programId
+    );
+    const [vote2Pda] = PublicKey.findProgramAddressSync(
+      [
+        Buffer.from(VOTE_SEED),
+        milestone1Pda.toBuffer(),
+        contributor2.publicKey.toBuffer(),
+      ],
+      program.programId
+    );
+    const [vote3Pda] = PublicKey.findProgramAddressSync(
+      [
+        Buffer.from(VOTE_SEED),
+        milestone1Pda.toBuffer(),
+        contributor3.publicKey.toBuffer(),
+      ],
+      program.programId
+    );
+    const [vote4Pda] = PublicKey.findProgramAddressSync(
+      [
+        Buffer.from(VOTE_SEED),
+        milestone1Pda.toBuffer(),
+        contributor4.publicKey.toBuffer(),
+      ],
+      program.programId
+    );
+
+    const [vote5Pda] = PublicKey.findProgramAddressSync(
+      [
+        Buffer.from(VOTE_SEED),
+        milestone1Pda.toBuffer(),
+        contributor5.publicKey.toBuffer(),
+      ],
+      program.programId
+    );
+
+    await program.methods
+      .voteOnMilestone(true)
+      .accountsStrict({
+        voter: contributor1.publicKey,
+        user: contributor1Pda,
+        project: project2Pda,
+        milestone: milestone1Pda,
+        contribution: contribution12Pda,
+        vote: vote1Pda,
+        systemProgram: SystemProgram.programId,
+      })
+      .signers([contributor1])
+      .rpc();
+    
+    await program.methods
+      .voteOnMilestone(true)
+      .accountsStrict({
+        voter: contributor2.publicKey,
+        user: contributor2Pda,
+        project: project2Pda,
+        milestone: milestone1Pda,
+        contribution: contribution22Pda,
+        vote: vote2Pda,
+        systemProgram: SystemProgram.programId,
+      })
+      .signers([contributor2])
+      .rpc();
+    
+    await program.methods
+      .voteOnMilestone(false)
+      .accountsStrict({
+        voter: contributor3.publicKey,
+        user: contributor1Pda,
+        project: project2Pda,
+        milestone: milestone1Pda,
+        contribution: contribution32Pda,
+        vote: vote3Pda,
+        systemProgram: SystemProgram.programId,
+      })
+      .signers([contributor3])
+      .rpc();
+    
+    await program.methods
+      .voteOnMilestone(true)
+      .accountsStrict({
+        voter: contributor4.publicKey,
+        user: contributor4Pda,
+        project: project2Pda,
+        milestone: milestone1Pda,
+        contribution: contribution42Pda,
+        vote: vote4Pda,
+        systemProgram: SystemProgram.programId,
+      })
+      .signers([contributor4])
+      .rpc();
+    
+    await program.methods
+      .voteOnMilestone(false)
+      .accountsStrict({
+        voter: contributor5.publicKey,
+        user: contributor5Pda,
+        project: project2Pda,
+        milestone: milestone1Pda,
+        contribution: contribution52Pda,
+        vote: vote1Pda,
+        systemProgram: SystemProgram.programId,
+      })
+      .signers([contributor5])
+      .rpc();
+
+    // -----------------------
+    // 5. Milestone 2
+    // -----------------------
   });
 });
