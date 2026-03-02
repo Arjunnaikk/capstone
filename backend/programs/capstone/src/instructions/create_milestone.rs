@@ -85,7 +85,7 @@ impl<'info> CreateMilestone<'info> {
         let clock = Clock::get()?;
         let current_time = clock.unix_timestamp;
 
-        let deadline = current_time.checked_add(60).unwrap();
+        let deadline = current_time.checked_add(60).ok_or(Error::Overflow)?;
 
         require!(
             self.project.project_state == ProjectState::Development,

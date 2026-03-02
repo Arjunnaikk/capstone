@@ -61,14 +61,14 @@ impl<'info> ApproveMilestone<'info> {
         let required_funder_quorum = (self.project.funder_count as u64)
             .saturating_mul(30)
             .checked_div(100)
-            .unwrap_or(0);
+            .ok_or(Error::Overflow)?;
 
         let required_capital_quorum = self
             .project
             .collected_amount
             .saturating_mul(30)
             .checked_div(100)
-            .unwrap_or(0);
+            .ok_or(Error::Overflow)?;
 
         let headcount_passed = (self.milestone.votes_casted as u64) >= required_funder_quorum;
         let capital_passed = self.milestone.capital_casted >= required_capital_quorum;
@@ -101,7 +101,7 @@ impl<'info> ApproveMilestone<'info> {
                     .collected_amount
                     .saturating_sub(self.project.withdrawn_amount)
             } else {
-                self.project.collected_amount.checked_div(4).unwrap_or(0)
+                self.project.collected_amount.checked_div(4).ok_or(Error::Overflow)?
             };
 
             **self.vault.to_account_info().lamports.borrow_mut() = self
@@ -115,7 +115,7 @@ impl<'info> ApproveMilestone<'info> {
                 .project_authority
                 .lamports()
                 .checked_add(payout_amount)
-                .unwrap_or(0);
+                .ok_or(Error::Overflow)?;
 
             self.project.withdrawn_amount =
                 self.project.withdrawn_amount.saturating_add(payout_amount);

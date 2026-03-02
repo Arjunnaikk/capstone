@@ -54,5 +54,11 @@ pub enum Error {
     AlreadyVoted,
 
     #[msg("Given deadline is invalid.")]
-    InvalidDeadline
+    InvalidDeadline,
+
+    #[msg("Deadline has not passed yet.")]
+    DeadlineNotPassed,
+
+    #[msg("Target amount has already been reached.")]
+    TargetAlreadyReached,
 }

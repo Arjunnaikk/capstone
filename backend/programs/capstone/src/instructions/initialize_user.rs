@@ -26,8 +26,8 @@ impl<'info> InitializeUser<'info> {
             projects_posted: 0,
             milestones_succeeded: 0,
             projects_succeeded: 0,
-            time_joined: Clock::get().unwrap().unix_timestamp,
-            last_active_time: Clock::get().unwrap().unix_timestamp,
+            time_joined: Clock::get()?.unix_timestamp,
+            last_active_time: Clock::get()?.unix_timestamp,
             bump: bumps.user_account,
         });
 

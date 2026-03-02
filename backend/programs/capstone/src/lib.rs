@@ -24,8 +24,8 @@ pub mod capstone {
         Ok(())
     }
     
-    pub fn create_project(ctx: Context<CreateProject>, args: CreateProjectArgs) -> Result<()> {
-        ctx.accounts.create_project(args, ctx.bumps)?;
+    pub fn create_project(ctx: Context<CreateProject>, args: CreateProjectArgs, task_id: u16) -> Result<()> {
+        ctx.accounts.create_project(args, task_id, ctx.bumps)?;
         Ok(())
     }
 
@@ -55,6 +55,11 @@ pub mod capstone {
 
     pub fn claim_refund(ctx: Context<ClaimRefund>) -> Result<()> {
         ctx.accounts.claim_refund()?;
+        Ok(())
+    }
+
+    pub fn cancel_unfunded_project(ctx: Context<CancelUnfundedProject>) -> Result<()> {
+        ctx.accounts.cancel_unfunded_project()?;
         Ok(())
     }
 }
