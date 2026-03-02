@@ -41,7 +41,6 @@ describe("capstone", () => {
     await provider.sendAndConfirm(tx, [from]);
   }
 
-
   async function loadMoney() {
     await fundWallet(admin, user.publicKey, 10);
     await fundWallet(admin, contributor1.publicKey, 10);
@@ -90,6 +89,8 @@ describe("capstone", () => {
   const projectName2 = "MyTestProject2";
 
   // tuktuk setup
+  let tuktukProgram : any;
+  let taskId = getRandomId(); 
   const taskQueue = new anchor.web3.PublicKey(
     "GnCH4xcCtPTqiHa3z76dPW4DX7toa6qCntNJVtwS5KZc"
   );
@@ -106,11 +107,9 @@ describe("capstone", () => {
 
   console.log("queueAuthority: ", queueAuthority);
 
-  
-
   before(async () => {
-    // await loadMoney();
-
+  //  await loadMoney();
+    tuktukProgram = await init(provider); 
     // derive vault PDA
     [vaultPda, vaultBump] = PublicKey.findProgramAddressSync(
       [Buffer.from(VAULT_SEED)],
@@ -218,11 +217,9 @@ describe("capstone", () => {
       [Buffer.from(CONTRIBUTION_SEED), contributor5.publicKey.toBuffer(), project2Pda.toBuffer()],
       program.programId
     );
-
-
   });
 
-  it("Initializes the vault", async () => {
+  it("Initializes vault PDA", async () => {
     await program.methods
       .initialize()
       .accountsStrict({
@@ -232,6 +229,8 @@ describe("capstone", () => {
       })
       .signers([admin])
       .rpc();
+    
+    console.log("Vault is initialized");
 
     const vaultAccount = await program.account.vault.fetch(vaultPda);
 
@@ -239,7 +238,7 @@ describe("capstone", () => {
     assert.strictEqual(vaultAccount.bump, vaultBump);
   });
 
-  it("Initializes a user account", async () => {
+  it("Initializes a user PDA", async () => {
     const beforeTs = Math.floor(Date.now() / 1000);
 
     await program.methods
@@ -251,16 +250,18 @@ describe("capstone", () => {
       })
       .signers([user])
       .rpc();
+    
+    console.log("Main user PDA initialized");
 
     const userAccount = await program.account.user.fetch(userPda);
 
-    assert.strictEqual(userAccount.contributedAmount.toNumber(), 0, "donated amount is not correct");
-    assert.strictEqual(userAccount.projectsPosted.toNumber(), 0, "projects posted are not correct");
-    assert.strictEqual(userAccount.bump, userBump, "bump is not correct");
-    assert.isAtLeast(userAccount.timeJoined.toNumber(), beforeTs, "joining time is not correct");
+    assert.strictEqual(userAccount.contributedAmount.toNumber(), 0);
+    assert.strictEqual(userAccount.projectsPosted.toNumber(), 0);
+    assert.strictEqual(userAccount.bump, userBump);
+    assert.isAtLeast(userAccount.timeJoined.toNumber(), beforeTs);
   });
 
-  it("Initializes the contributor's user accounts", async () => {
+  it("Initializes contributor's user PDAs", async () => {
     await program.methods
       .initializeUser()
       .accountsStrict({
@@ -270,6 +271,8 @@ describe("capstone", () => {
       })
       .signers([contributor1])
       .rpc();
+    
+    console.log("Contributor 1 user PDA initialized");
 
     await program.methods
       .initializeUser()
@@ -280,6 +283,8 @@ describe("capstone", () => {
       })
       .signers([contributor2])
       .rpc();
+    
+    console.log("Contributor 2 user PDA initialized");
 
     await program.methods
       .initializeUser()
@@ -290,6 +295,8 @@ describe("capstone", () => {
       })
       .signers([contributor3])
       .rpc();
+    
+    console.log("Contributor 3 user PDA initialized");
 
     await program.methods
       .initializeUser()
@@ -300,6 +307,8 @@ describe("capstone", () => {
       })
       .signers([contributor4])
       .rpc();
+    
+    console.log("Contributor 4 user PDA initialized");
 
     await program.methods
       .initializeUser()
@@ -310,15 +319,17 @@ describe("capstone", () => {
       })
       .signers([contributor5])
       .rpc();
+    
+    console.log("Contributor 5 user PDA initialized");
+
   });
 
-  xit("Creates a project successfully", async () => {
-    const targetAmount = new anchor.BN(0.003 * anchor.web3.LAMPORTS_PER_SOL);
+  it("Creates a project successfully", async () => {
+    const targetAmount = new anchor.BN(0.005 * anchor.web3.LAMPORTS_PER_SOL);
     const funding_deadline = new anchor.BN(Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60);
     const delivery_deadline = new anchor.BN(Math.floor(Date.now() / 1000) + 14 * 24 * 60 * 60);
-    let taskID = getRandomId(); 
+    taskId = getRandomId(); 
     const beforeUser = await program.account.user.fetch(userPda);
-    let tuktukProgram = await init(provider);
 
     await program.methods
       .createProject({
@@ -326,20 +337,22 @@ describe("capstone", () => {
         targetAmount: targetAmount,
         fundingDeadline: funding_deadline,
         deliveryDeadline: delivery_deadline
-      }, taskID)
+      }, taskId)
       .accountsStrict({
         projectAuthority: user.publicKey,
         project: project1Pda,
         user: userPda,
         taskQueue: taskQueue,
         taskQueueAuthority: taskQueueAuthority,
-        task: taskKey(taskQueue, taskID)[0],
+        task: taskKey(taskQueue, taskId)[0],
         queueAuthority: queueAuthority,
         systemProgram: SystemProgram.programId,
         tuktukProgram: tuktukProgram.programId,
       })
       .signers([user])
       .rpc();
+    
+    console.log("Project 1 PDA initialized");
 
     const projectAccount = await program.account.project.fetch(project1Pda);
     const afterUser = await program.account.user.fetch(userPda);
@@ -352,12 +365,8 @@ describe("capstone", () => {
     assert.strictEqual(afterUser.projectsPosted.toNumber(), beforeUser.projectsPosted.toNumber() + 1);
   });
 
-  xit("Allows a user to contribute for the first time", async () => {
+  it("Moves project to Development stage on reaching target", async () => {
     const amount = new anchor.BN(0.001 * anchor.web3.LAMPORTS_PER_SOL);
-
-    const beforeProject = await program.account.project.fetch(project1Pda);
-    const beforeUser = await program.account.user.fetch(contributor1Pda);
-    const beforeVaultBalance = await provider.connection.getBalance(vaultPda);
 
     await program.methods
       .contributeFund(amount)
@@ -371,63 +380,8 @@ describe("capstone", () => {
       })
       .signers([contributor1])
       .rpc();
-
-    const contributionAccount = await program.account.contribution.fetch(contribution1Pda);
-    const afterProject = await program.account.project.fetch(project1Pda);
-    const afterUser = await program.account.user.fetch(contributor1Pda);
-    const afterVaultBalance = await provider.connection.getBalance(vaultPda);
-
-    assert.strictEqual(contributionAccount.amount.toString(), amount.toString());
-    assert.strictEqual(afterProject.collectedAmount.toString(), beforeProject.collectedAmount.add(amount).toString());
-    assert.strictEqual(afterProject.funderCount, beforeProject.funderCount + 1);
-    assert.strictEqual(afterUser.contributedAmount.toString(), beforeUser.contributedAmount.add(amount).toString());
-    assert.strictEqual(afterVaultBalance, beforeVaultBalance + amount.toNumber());
-  });
-
-  xit("Aggregates contribution if same user contributes again", async () => {
-
-    const amount = new anchor.BN(
-      0.001 * anchor.web3.LAMPORTS_PER_SOL
-    );
-
-    const beforeProject =
-      await program.account.project.fetch(project1Pda);
-
-    const beforeContribution =
-      await program.account.contribution.fetch(contribution1Pda);
-
-    await program.methods
-      .contributeFund(amount)
-      .accountsStrict({
-        funder: contributor1.publicKey,
-        vault: vaultPda,
-        project: project1Pda,
-        user: contributor1Pda,
-        contribution: contribution1Pda,
-        systemProgram: SystemProgram.programId,
-      })
-      .signers([contributor1])
-      .rpc();
-
-    const afterProject =
-      await program.account.project.fetch(project1Pda);
-
-    const afterContribution =
-      await program.account.contribution.fetch(contribution1Pda);
-
-    assert.strictEqual(
-      afterContribution.amount.toString(),
-      beforeContribution.amount.add(amount).toString()
-    );
-
-    assert.strictEqual(
-      afterProject.funderCount,
-      beforeProject.funderCount
-    );
-  });
-
-  xit("Moves project to Development once target is reached", async () => {
-    const amount = new anchor.BN(0.001 * anchor.web3.LAMPORTS_PER_SOL);
+    
+    console.log("Contributor 1's PDA initialized - Project 1");
 
     await program.methods
       .contributeFund(amount)
@@ -441,6 +395,52 @@ describe("capstone", () => {
       })
       .signers([contributor2])
       .rpc();
+    console.log("Contributor 2's PDA initialized - Project 1");
+
+    await program.methods
+      .contributeFund(amount)
+      .accountsStrict({
+        funder: contributor3.publicKey,
+        vault: vaultPda,
+        project: project1Pda,
+        user: contributor3Pda,
+        contribution: contribution3Pda,
+        systemProgram: SystemProgram.programId,
+      })
+      .signers([contributor3])
+      .rpc();
+
+    console.log("Contributor 3's PDA initialized - Project 1");
+
+    await program.methods
+      .contributeFund(amount)
+      .accountsStrict({
+        funder: contributor4.publicKey,
+        vault: vaultPda,
+        project: project1Pda,
+        user: contributor4Pda,
+        contribution: contribution4Pda,
+        systemProgram: SystemProgram.programId,
+      })
+      .signers([contributor4])
+      .rpc();
+
+    console.log("Contributor 4's PDA initialized - Project 1");
+
+    await program.methods
+      .contributeFund(amount)
+      .accountsStrict({
+        funder: contributor5.publicKey,
+        vault: vaultPda,
+        project: project1Pda,
+        user: contributor5Pda,
+        contribution: contribution5Pda,
+        systemProgram: SystemProgram.programId,
+      })
+      .signers([contributor5])
+      .rpc();
+
+    console.log("Contributor 5's PDA initialized - Project 1");
 
     const updatedProject =
       await program.account.project.fetch(project1Pda);
@@ -450,11 +450,9 @@ describe("capstone", () => {
     );
   });
 
-  xit("Creates a milestone successfully", async () => {
+  it("Initialize a milestone PDA for project", async () => {
     const milestoneType = { design: {} };
-    const milestoneClaim = 1;
-    let tuktukProgram = await init(provider);
-    const taskId = 37;
+    taskId = getRandomId();
 
     const [milestonePda, milestoneBump] =
       PublicKey.findProgramAddressSync(
@@ -466,8 +464,6 @@ describe("capstone", () => {
         ],
         program.programId
       );
-
-    const beforeUser = await program.account.user.fetch(userPda);
 
     await program.methods
       .createMilestone(milestoneType,taskId)
@@ -488,6 +484,8 @@ describe("capstone", () => {
       .rpc({
         skipPreflight: true
       });
+    
+    console.log("Milestone 1 PDA initialized - Project 1");
 
     const milestoneAccount =
       await program.account.milestone.fetch(milestonePda);
@@ -500,53 +498,176 @@ describe("capstone", () => {
       project1Pda.toString()
     );
 
-    assert.strictEqual(
-      milestoneAccount.attemptNumber,
-      0
-    );
-
-    assert.ok(
-      milestoneAccount.milestoneStatus.voting !== undefined
-    );
-
-    assert.strictEqual(
-      milestoneAccount.voteForWeight.toNumber(),
-      0
-    );
-
-    assert.strictEqual(
-      milestoneAccount.voteAgainstWeight.toNumber(),
-      0
-    );
-
-    assert.strictEqual(
-      milestoneAccount.bump,
-      milestoneBump
-    );
+    assert.strictEqual(milestoneAccount.attemptNumber,1);
+    assert.ok(milestoneAccount.milestoneStatus.voting !== undefined);
+    assert.strictEqual(milestoneAccount.voteForWeight.toNumber(),0);
+    assert.strictEqual(milestoneAccount.voteAgainstWeight.toNumber(),0);
+    assert.strictEqual(milestoneAccount.bump,milestoneBump);
   });
 
-  it("Full success lifecycle simulation", async () => {
-    const targetAmount = new anchor.BN(0.003 * anchor.web3.LAMPORTS_PER_SOL);
-    const funding_deadline = new anchor.BN(Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60);
-    const delivery_deadline = new anchor.BN(Math.floor(Date.now() / 1000) + 14 * 24 * 60 * 60);
-    let tuktukProgram = await init(provider);
-    let taskID = getRandomId();
+  it("Failure lifecycle simulation", async () => {
+    taskId = getRandomId();
     const amount = new anchor.BN(0.01 * anchor.web3.LAMPORTS_PER_SOL);
 
+    // -----------------------
+    // 1. Voting - Attempt 1
+    // -----------------------
+    taskId = getRandomId();
+
+    const [milestone1Pda] =
+      PublicKey.findProgramAddressSync(
+        [
+          Buffer.from(MILESTONE_SEED),
+          user.publicKey.toBuffer(),
+          project1Pda.toBuffer(),
+          Buffer.from([0])
+        ],
+        program.programId
+      );
+
+    const [vote1Pda] = PublicKey.findProgramAddressSync(
+      [
+        Buffer.from(VOTE_SEED),
+        milestone1Pda.toBuffer(),
+        contributor1.publicKey.toBuffer(),
+      ],
+      program.programId
+    );
+
+    const [vote2Pda] = PublicKey.findProgramAddressSync(
+      [
+        Buffer.from(VOTE_SEED),
+        milestone1Pda.toBuffer(),
+        contributor2.publicKey.toBuffer(),
+      ],
+      program.programId
+    );
+
+    const [vote3Pda] = PublicKey.findProgramAddressSync(
+      [
+        Buffer.from(VOTE_SEED),
+        milestone1Pda.toBuffer(),
+        contributor3.publicKey.toBuffer(),
+      ],
+      program.programId
+    );
+
+    const [vote4Pda] = PublicKey.findProgramAddressSync(
+      [
+        Buffer.from(VOTE_SEED),
+        milestone1Pda.toBuffer(),
+        contributor4.publicKey.toBuffer(),
+      ],
+      program.programId
+    );
+
+    const [vote5Pda] = PublicKey.findProgramAddressSync(
+      [
+        Buffer.from(VOTE_SEED),
+        milestone1Pda.toBuffer(),
+        contributor5.publicKey.toBuffer(),
+      ],
+      program.programId
+    );
+
     await program.methods
-      .createProject({
-        projectName: projectName1,
-        targetAmount: targetAmount,
-        fundingDeadline: funding_deadline,
-        deliveryDeadline: delivery_deadline
-      }, taskID)
+      .voteOnMilestone(false)
       .accountsStrict({
-        projectAuthority: user.publicKey,
+        voter: contributor1.publicKey,
+        user: contributor1Pda,
         project: project1Pda,
+        milestone: milestone1Pda,
+        contribution: contribution1Pda,
+        vote: vote1Pda,
+        systemProgram: SystemProgram.programId,
+      })
+      .signers([contributor1])
+      .rpc();
+
+    console.log("Contributor 1 vote PDA initialized- Attempt 1");
+
+    await program.methods
+      .voteOnMilestone(false)
+      .accountsStrict({
+        voter: contributor2.publicKey,
+        user: contributor2Pda,
+        project: project1Pda,
+        milestone: milestone1Pda,
+        contribution: contribution2Pda,
+        vote: vote2Pda,
+        systemProgram: SystemProgram.programId,
+      })
+      .signers([contributor2])
+      .rpc();
+
+    console.log("Contributor 2 vote PDA initialized- Attempt 1");
+
+    await program.methods
+      .voteOnMilestone(false)
+      .accountsStrict({
+        voter: contributor3.publicKey,
+        user: contributor3Pda,
+        project: project1Pda,
+        milestone: milestone1Pda,
+        contribution: contribution3Pda,
+        vote: vote3Pda,
+        systemProgram: SystemProgram.programId,
+      })
+      .signers([contributor3])
+      .rpc();
+
+    console.log("Contributor 3 vote PDA initialized- Attempt 1");
+
+    await program.methods
+      .voteOnMilestone(true)
+      .accountsStrict({
+        voter: contributor4.publicKey,
+        user: contributor4Pda,
+        project: project1Pda,
+        milestone: milestone1Pda,
+        contribution: contribution4Pda,
+        vote: vote4Pda,
+        systemProgram: SystemProgram.programId,
+      })
+      .signers([contributor4])
+      .rpc();
+
+    console.log("Contributor 4 vote PDA initialized- Attempt 1");
+
+    await program.methods
+      .voteOnMilestone(true)
+      .accountsStrict({
+        voter: contributor5.publicKey,
+        user: contributor5Pda,
+        project: project1Pda,
+        milestone: milestone1Pda,
+        contribution: contribution5Pda,
+        vote: vote5Pda,
+        systemProgram: SystemProgram.programId,
+      })
+      .signers([contributor5])
+      .rpc();
+
+    console.log("Contributor 5 vote PDA initialized- Attempt 1");
+
+    await sleep(180 * 1000);
+
+    //-----------------------
+    // 3. Voting - Attempt 2
+    // -----------------------
+    taskId = getRandomId();
+
+    await program.methods
+      .retryMilestone(taskId)
+      .accountsStrict({
+        milestoneAuthority: user.publicKey,
+        project: project1Pda,
+        milestone: milestone1Pda,
         user: userPda,
+        vault: vaultPda,
         taskQueue: taskQueue,
         taskQueueAuthority: taskQueueAuthority,
-        task: taskKey(taskQueue, taskID)[0],
+        task: taskKey(taskQueue, taskId)[0],
         queueAuthority: queueAuthority,
         systemProgram: SystemProgram.programId,
         tuktukProgram: tuktukProgram.programId,
@@ -554,12 +675,240 @@ describe("capstone", () => {
       .signers([user])
       .rpc();
 
-    console.log("Project created");
+    console.log("Retrying milestone - Attempt 1")
+
+    await program.methods
+      .voteOnMilestone(false)
+      .accountsStrict({
+        voter: contributor1.publicKey,
+        user: contributor1Pda,
+        project: project1Pda,
+        milestone: milestone1Pda,
+        contribution: contribution1Pda,
+        vote: vote1Pda,
+        systemProgram: SystemProgram.programId,
+      })
+      .signers([contributor1])
+      .rpc();
+
+    console.log("Contributor 1 has voted - Attempt 2");
+
+    await program.methods
+      .voteOnMilestone(false)
+      .accountsStrict({
+        voter: contributor2.publicKey,
+        user: contributor2Pda,
+        project: project1Pda,
+        milestone: milestone1Pda,
+        contribution: contribution2Pda,
+        vote: vote2Pda,
+        systemProgram: SystemProgram.programId,
+      })
+      .signers([contributor2])
+      .rpc();
+
+    console.log("Contributor 2 has voted - Attempt 2");
+
+    await program.methods
+      .voteOnMilestone(false)
+      .accountsStrict({
+        voter: contributor3.publicKey,
+        user: contributor3Pda,
+        project: project1Pda,
+        milestone: milestone1Pda,
+        contribution: contribution3Pda,
+        vote: vote3Pda,
+        systemProgram: SystemProgram.programId,
+      })
+      .signers([contributor3])
+      .rpc();
+
+    console.log("Contributor 3 has voted - Attempt 2");
+
+    await program.methods
+      .voteOnMilestone(true)
+      .accountsStrict({
+        voter: contributor4.publicKey,
+        user: contributor4Pda,
+        project: project1Pda,
+        milestone: milestone1Pda,
+        contribution: contribution4Pda,
+        vote: vote4Pda,
+        systemProgram: SystemProgram.programId,
+      })
+      .signers([contributor4])
+      .rpc();
+
+    console.log("Contributor 4 has voted - Attempt 2");
+
+    await program.methods
+      .voteOnMilestone(true)
+      .accountsStrict({
+        voter: contributor5.publicKey,
+        user: contributor5Pda,
+        project: project1Pda,
+        milestone: milestone1Pda,
+        contribution: contribution5Pda,
+        vote: vote5Pda,
+        systemProgram: SystemProgram.programId,
+      })
+      .signers([contributor5])
+      .rpc();
+
+    console.log("Contributor 5 has voted - Attempt 2");
+
+    await sleep(180 * 1000);
+
+    //-----------------------
+    // 4. Voting - Attempt 3
+    // -----------------------
+    taskId = getRandomId();
+
+    await program.methods
+      .retryMilestone(taskId)
+      .accountsStrict({
+        milestoneAuthority: user.publicKey,
+        project: project1Pda,
+        milestone: milestone1Pda,
+        user: userPda,
+        vault: vaultPda,
+        taskQueue: taskQueue,
+        taskQueueAuthority: taskQueueAuthority,
+        task: taskKey(taskQueue, taskId)[0],
+        queueAuthority: queueAuthority,
+        systemProgram: SystemProgram.programId,
+        tuktukProgram: tuktukProgram.programId,
+      })
+      .signers([user])
+      .rpc();
+
+    console.log("Retrying milestone - Attempt 2")
+
+    await program.methods
+      .voteOnMilestone(false)
+      .accountsStrict({
+        voter: contributor1.publicKey,
+        user: contributor1Pda,
+        project: project1Pda,
+        milestone: milestone1Pda,
+        contribution: contribution1Pda,
+        vote: vote1Pda,
+        systemProgram: SystemProgram.programId,
+      })
+      .signers([contributor1])
+      .rpc();
+
+    console.log("Contributor 1 has voted - Attempt 3");
+
+    await program.methods
+      .voteOnMilestone(false)
+      .accountsStrict({
+        voter: contributor2.publicKey,
+        user: contributor2Pda,
+        project: project1Pda,
+        milestone: milestone1Pda,
+        contribution: contribution2Pda,
+        vote: vote2Pda,
+        systemProgram: SystemProgram.programId,
+      })
+      .signers([contributor2])
+      .rpc();
+
+    console.log("Contributor 2 has voted - Attempt 3");
+
+    await program.methods
+      .voteOnMilestone(false)
+      .accountsStrict({
+        voter: contributor3.publicKey,
+        user: contributor3Pda,
+        project: project1Pda,
+        milestone: milestone1Pda,
+        contribution: contribution3Pda,
+        vote: vote3Pda,
+        systemProgram: SystemProgram.programId,
+      })
+      .signers([contributor3])
+      .rpc();
+
+    console.log("Contributor 3 has voted - Attempt 3");
+
+    await program.methods
+      .voteOnMilestone(true)
+      .accountsStrict({
+        voter: contributor4.publicKey,
+        user: contributor4Pda,
+        project: project1Pda,
+        milestone: milestone1Pda,
+        contribution: contribution4Pda,
+        vote: vote4Pda,
+        systemProgram: SystemProgram.programId,
+      })
+      .signers([contributor4])
+      .rpc();
+
+    console.log("Contributor 4 has voted - Attempt 3");
+
+    await program.methods
+      .voteOnMilestone(true)
+      .accountsStrict({
+        voter: contributor5.publicKey,
+        user: contributor5Pda,
+        project: project1Pda,
+        milestone: milestone1Pda,
+        contribution: contribution5Pda,
+        vote: vote5Pda,
+        systemProgram: SystemProgram.programId,
+      })
+      .signers([contributor5])
+      .rpc();
+
+    console.log("Contributor 5 has voted - Attempt 3");
+
+    console.log("Waiting for milestone resolution");
+
+    await sleep(120 * 1000);
+
+    const project1 = await program.account.project.fetch(project1Pda);
+    const milestone1 = await program.account.milestone.fetch(milestone1Pda);
+
+    assert.ok(milestone1.milestoneStatus.disapproved !== undefined,"Milestone is approved even after all the retries");
+
+    assert.ok(project1.projectState.failed !== undefined,"Project is not marked as failed");
+  });
+
+  it("Success lifecycle simulation", async () => {
+    const targetAmount = new anchor.BN(0.05 * anchor.web3.LAMPORTS_PER_SOL);
+    const funding_deadline = new anchor.BN(Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60);
+    const delivery_deadline = new anchor.BN(Math.floor(Date.now() / 1000) + 14 * 24 * 60 * 60);
+    const amount = new anchor.BN(0.01 * anchor.web3.LAMPORTS_PER_SOL);
+    taskId = getRandomId();
+
+    await program.methods
+      .createProject({
+        projectName: projectName2,
+        targetAmount: targetAmount,
+        fundingDeadline: funding_deadline,
+        deliveryDeadline: delivery_deadline
+      }, taskId)
+      .accountsStrict({
+        projectAuthority: user.publicKey,
+        project: project2Pda,
+        user: userPda,
+        taskQueue: taskQueue,
+        taskQueueAuthority: taskQueueAuthority,
+        task: taskKey(taskQueue, taskId)[0],
+        queueAuthority: queueAuthority,
+        systemProgram: SystemProgram.programId,
+        tuktukProgram: tuktukProgram.programId,
+      })
+      .signers([user])
+      .rpc();
+
+    console.log("Project 2 PDA initialized");
 
     // -----------------------
     // 3. Contributions
     // -----------------------
-
     await program.methods
       .contributeFund(amount)
       .accountsStrict({
@@ -572,7 +921,8 @@ describe("capstone", () => {
       })
       .signers([contributor1])
       .rpc();
-    console.log("Contributor 1 has contributed");
+    
+    console.log("Contributor 1's PDA initialized - Project 2");
 
     await program.methods
       .contributeFund(amount)
@@ -586,7 +936,8 @@ describe("capstone", () => {
       })
       .signers([contributor2])
       .rpc();
-    console.log("Contributor 2 has contributed");
+    
+    console.log("Contributor 2's PDA initialized - Project 2");
 
     await program.methods
       .contributeFund(amount)
@@ -601,7 +952,7 @@ describe("capstone", () => {
       .signers([contributor3])
       .rpc();
 
-    console.log("Contributor 3 has contributed");
+    console.log("Contributor 3's PDA initialized - Project 2");
 
     await program.methods
       .contributeFund(amount)
@@ -616,7 +967,7 @@ describe("capstone", () => {
       .signers([contributor4])
       .rpc();
 
-    console.log("Contributor 4 has contributed");
+    console.log("Contributor 4's PDA initialized - Project 2");
 
     await program.methods
       .contributeFund(amount)
@@ -631,13 +982,13 @@ describe("capstone", () => {
       .signers([contributor5])
       .rpc();
 
-    console.log("Contributor 5 has contributed");
+    console.log("Contributor 5's PDA initialized - Project 2");
 
     // -----------------------
     // 4. Milestone 1
     // -----------------------
     const milestone1Type = { design: {} };
-    let taskId = getRandomId();
+    taskId = getRandomId();
 
     const [milestone1Pda] =
       PublicKey.findProgramAddressSync(
@@ -670,7 +1021,7 @@ describe("capstone", () => {
         skipPreflight: true
       });
 
-    console.log("Milestone 1 is created");
+    console.log("Milestone 1 PDA initialized - Project 2");
 
     const [vote1Pda] = PublicKey.findProgramAddressSync(
       [
@@ -731,7 +1082,7 @@ describe("capstone", () => {
       .signers([contributor1])
       .rpc();
 
-    console.log("Contributor 1 has voted");
+    console.log("Contributor 1 vote PDA initialized - Milestone 1");
 
     await program.methods
       .voteOnMilestone(true)
@@ -747,7 +1098,7 @@ describe("capstone", () => {
       .signers([contributor2])
       .rpc();
 
-    console.log("Contributor 2 has voted");
+    console.log("Contributor 2 vote PDA initialized - Milestone 1");
 
     await program.methods
       .voteOnMilestone(false)
@@ -763,7 +1114,7 @@ describe("capstone", () => {
       .signers([contributor3])
       .rpc();
 
-    console.log("Contributor 3 has voted");
+    console.log("Contributor 3 vote PDA initialized - Milestone 1");
 
     await program.methods
       .voteOnMilestone(true)
@@ -779,7 +1130,7 @@ describe("capstone", () => {
       .signers([contributor4])
       .rpc();
 
-    console.log("Contributor 4 has voted");
+    console.log("Contributor 4 vote PDA initialized - Milestone 1");
 
     await program.methods
       .voteOnMilestone(false)
@@ -795,9 +1146,9 @@ describe("capstone", () => {
       .signers([contributor5])
       .rpc();
 
-    console.log("Contributor 5 has voted");
+    console.log("Contributor 5 vote PDA initialized - Milestone 1");
 
-    await sleep(120 * 1000);
+    await sleep(180 * 1000);
 
     // -----------------------
     // 5. Milestone 2
@@ -836,7 +1187,7 @@ describe("capstone", () => {
         skipPreflight: true
       });
 
-    console.log("Milestone 2 is created");
+    console.log("Milestone 2 PDA initialized");
 
     const [vote12Pda] = PublicKey.findProgramAddressSync(
       [
@@ -897,7 +1248,7 @@ describe("capstone", () => {
       .signers([contributor1])
       .rpc();
 
-    console.log("Contributor 1 has voted");
+    console.log("Contributor 1 vote PDA initialized - Milestone 1");
 
     await program.methods
       .voteOnMilestone(true)
@@ -913,7 +1264,7 @@ describe("capstone", () => {
       .signers([contributor2])
       .rpc();
 
-    console.log("Contributor 2 has voted");
+    console.log("Contributor 2 vote PDA initialized - Milestone 2");
 
     await program.methods
       .voteOnMilestone(false)
@@ -929,7 +1280,7 @@ describe("capstone", () => {
       .signers([contributor3])
       .rpc();
 
-    console.log("Contributor 3 has voted");
+    console.log("Contributor 3 vote PDA initialized - Milestone 2");
 
     await program.methods
       .voteOnMilestone(true)
@@ -945,7 +1296,7 @@ describe("capstone", () => {
       .signers([contributor4])
       .rpc();
 
-    console.log("Contributor 4 has voted");
+    console.log("Contributor 4 vote PDA initialized - Milestone 2");
 
     await program.methods
       .voteOnMilestone(false)
@@ -961,9 +1312,9 @@ describe("capstone", () => {
       .signers([contributor5])
       .rpc();
 
-    console.log("Contributor 5 has voted");
+    console.log("Contributor 5 vote PDA initialized - Milestone 2");
 
-    await sleep(120 * 1000);
+    await sleep(180 * 1000);
 
     // -----------------------
     // 6. Milestone 3
@@ -1002,8 +1353,7 @@ describe("capstone", () => {
         skipPreflight: true
       });
 
-    console.log("Milestone 3 is created");
-
+    console.log("Milestone 3 PDA initialized");
 
     const [vote13Pda] = PublicKey.findProgramAddressSync(
       [
@@ -1064,7 +1414,7 @@ describe("capstone", () => {
       .signers([contributor1])
       .rpc();
 
-    console.log("Contributor 1 has voted");
+    console.log("Contributor 1 vote PDA initialized - Milestone 3");
 
     await program.methods
       .voteOnMilestone(true)
@@ -1080,7 +1430,7 @@ describe("capstone", () => {
       .signers([contributor2])
       .rpc();
 
-    console.log("Contributor 2 has voted");
+    console.log("Contributor 2 vote PDA initialized - Milestone 3");
 
     await program.methods
       .voteOnMilestone(false)
@@ -1096,7 +1446,7 @@ describe("capstone", () => {
       .signers([contributor3])
       .rpc();
 
-    console.log("Contributor 3 has voted");
+    console.log("Contributor 3 vote PDA initialized - Milestone 3");
 
     await program.methods
       .voteOnMilestone(true)
@@ -1112,7 +1462,7 @@ describe("capstone", () => {
       .signers([contributor4])
       .rpc();
 
-    console.log("Contributor 4 has voted");
+    console.log("Contributor 4 vote PDA initialized - Milestone 3");
 
     await program.methods
       .voteOnMilestone(false)
@@ -1128,9 +1478,9 @@ describe("capstone", () => {
       .signers([contributor5])
       .rpc();
 
-    console.log("Contributor 5 has voted");
+    console.log("Contributor 5 vote PDA initialized - Milestone 3");
 
-    await sleep(120 * 1000);
+    await sleep(180 * 1000);
 
     //-----------------------
     // 7. Milestone 4
@@ -1169,8 +1519,7 @@ describe("capstone", () => {
         skipPreflight: true
       });
 
-    console.log("Milestone 4 is created");
-
+    console.log("Milestone 4 PDA initialized");
 
     const [vote14Pda] = PublicKey.findProgramAddressSync(
       [
@@ -1231,114 +1580,7 @@ describe("capstone", () => {
       .signers([contributor1])
       .rpc();
 
-    console.log("Contributor 1 has voted");
-
-    await program.methods
-      .voteOnMilestone(false)
-      .accountsStrict({
-        voter: contributor2.publicKey,
-        user: contributor2Pda,
-        project: project2Pda,
-        milestone: milestone4Pda,
-        contribution: contribution22Pda,
-        vote: vote24Pda,
-        systemProgram: SystemProgram.programId,
-      })
-      .signers([contributor2])
-      .rpc();
-
-    console.log("Contributor 2 has voted");
-
-    await program.methods
-      .voteOnMilestone(false)
-      .accountsStrict({
-        voter: contributor3.publicKey,
-        user: contributor3Pda,
-        project: project2Pda,
-        milestone: milestone4Pda,
-        contribution: contribution32Pda,
-        vote: vote34Pda,
-        systemProgram: SystemProgram.programId,
-      })
-      .signers([contributor3])
-      .rpc();
-
-    console.log("Contributor 3 has voted");
-
-    await program.methods
-      .voteOnMilestone(false)
-      .accountsStrict({
-        voter: contributor4.publicKey,
-        user: contributor4Pda,
-        project: project2Pda,
-        milestone: milestone4Pda,
-        contribution: contribution42Pda,
-        vote: vote44Pda,
-        systemProgram: SystemProgram.programId,
-      })
-      .signers([contributor4])
-      .rpc();
-
-    console.log("Contributor 4 has voted");
-
-    await program.methods
-      .voteOnMilestone(false)
-      .accountsStrict({
-        voter: contributor5.publicKey,
-        user: contributor5Pda,
-        project: project2Pda,
-        milestone: milestone4Pda,
-        contribution: contribution52Pda,
-        vote: vote54Pda,
-        systemProgram: SystemProgram.programId,
-      })
-      .signers([contributor5])
-      .rpc();
-
-    console.log("Contributor 5 has voted");
-
-    await sleep(120 * 1000);
-
-    //-----------------------
-    // 8. Retry Milestone
-    // -----------------------
-    await program.methods
-      .retryMilestone(taskId)
-      .accountsStrict({
-        milestoneAuthority: user.publicKey,
-        project: project2Pda,
-        milestone: milestone4Pda,
-        user: userPda,
-        vault: vaultPda,
-        taskQueue: taskQueue,
-        taskQueueAuthority: taskQueueAuthority,
-        task: taskKey(taskQueue, taskId)[0],
-        queueAuthority: queueAuthority,
-        systemProgram: SystemProgram.programId,
-        tuktukProgram: tuktukProgram.programId,
-      })
-      .signers([user])
-      .rpc();
-
-    console.log("Retrying milestone...")
-
-    await program.methods
-      .voteOnMilestone(true)
-      .accountsStrict({
-        voter: contributor1.publicKey,
-        user: contributor1Pda,
-        project: project2Pda,
-        milestone: milestone4Pda,
-        contribution: contribution12Pda,
-        vote: vote14Pda,
-        systemProgram: SystemProgram.programId,
-      })
-      .signers([contributor1])
-      .rpc({
-        skipPreflight: true
-      });
-
-    console.log("Contributor 1 has voted");
+    console.log("Contributor 1 vote PDA initialized - Milestone 4");
 
     await program.methods
       .voteOnMilestone(true)
@@ -1354,10 +1596,10 @@ describe("capstone", () => {
       .signers([contributor2])
       .rpc();
 
-    console.log("Contributor 2 has voted");
+    console.log("Contributor 2 vote PDA initialized - Milestone 4");
 
     await program.methods
-      .voteOnMilestone(false)
+      .voteOnMilestone(true)
       .accountsStrict({
         voter: contributor3.publicKey,
         user: contributor3Pda,
@@ -1370,7 +1612,7 @@ describe("capstone", () => {
       .signers([contributor3])
       .rpc();
 
-    console.log("Contributor 3 has voted");
+    console.log("Contributor 3 vote PDA initialized - Milestone 4");
 
     await program.methods
       .voteOnMilestone(true)
@@ -1386,7 +1628,7 @@ describe("capstone", () => {
       .signers([contributor4])
       .rpc();
 
-    console.log("Contributor 4 has voted");
+    console.log("Contributor 4 vote PDA initialized - Milestone 4");
 
     await program.methods
       .voteOnMilestone(true)
@@ -1401,11 +1643,11 @@ describe("capstone", () => {
       })
       .signers([contributor5])
       .rpc();
+
+    console.log("Contributor 5 vote PDA initialized - Milestone 4");
+
+    console.log("Waiting for crank to resolve the final milestone...");
     
-    console.log("Contributor 5 has voted");
-
-    console.log("Waiting for crank to resolve the final retried milestone...");
-
     await sleep(120 * 1000);
 
     const finalProject = await program.account.project.fetch(project2Pda);
@@ -1429,23 +1671,12 @@ describe("capstone", () => {
 
     assert.ok(
       finalMilestone4.milestoneStatus.approved !== undefined,
-      "Milestone 4 should be Approved after the retry"
-    );
-    assert.strictEqual(
-      finalMilestone4.attemptNumber,
-      1,
-      "Milestone 4 should reflect it succeeded on Attempt 1 (the first retry)"
+      "Milestone 4 should be approved"
     );
 
-    assert.isAbove(
-      finalCreator.projectsSucceeded.toNumber(),
-      0,
-      "Creator's successful project count should be incremented"
-    );
+    assert.isAbove(finalCreator.projectsSucceeded.toNumber(), 0, "Creator's successful project count should be incremented");
+    
     assert.strictEqual(
-      finalCreator.milestonesSucceeded.toNumber(),
-      4,
-      "Creator's cleared milestone count should reflect all 4 milestones"
-    );
+      finalCreator.milestonesSucceeded.toNumber(),4,"Creator's cleared milestone count should reflect all 4 milestones");
   });
 });

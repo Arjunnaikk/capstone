@@ -103,6 +103,7 @@ impl<'info> RetryMilestone<'info> {
         self.milestone.votes_casted = 0;
         self.milestone.capital_casted = 0;
         self.milestone.attempt_number = self.milestone.attempt_number.saturating_add(1);
+        self.milestone.voting_end_time = new_voting_deadline; 
         self.milestone.milestone_status = MilestoneState::Voting;
 
         self.user.last_active_time = clock.unix_timestamp;
