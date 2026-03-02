@@ -1,6 +1,6 @@
 use crate::{
     errors::Error,
-    state::{milestone::*, Project, User, Vault, PROJECT_SEED, USER_SEED, VAULT_SEED},
+    state::{PROJECT_SEED, Project, ProjectState, USER_SEED, User, VAULT_SEED, Vault, milestone::*},
 };
 use anchor_lang::solana_program::instruction::Instruction;
 use anchor_lang::{prelude::*, InstructionData};
@@ -15,14 +15,8 @@ use tuktuk_program::{
     TransactionSourceV0,
 };
 
-#[derive(Clone, Debug, AnchorDeserialize, AnchorSerialize)]
-pub struct CreateMilestoneArgs {
-    pub milestone_type: MilestoneType,
-    pub milestone_claim: u16,
-}
-
 #[derive(Accounts)]
-#[instruction(args: CreateMilestoneArgs)]
+#[instruction(milestone_type: MilestoneType)]
 pub struct CreateMilestone<'info> {
     #[account(mut)]
     pub milestone_authority: Signer<'info>,
@@ -30,7 +24,7 @@ pub struct CreateMilestone<'info> {
     #[account(
         init,
         space = Milestone::DISCRIMINATOR.len() +  Milestone::INIT_SPACE,
-        seeds= [MILESTONE_SEED, project.project_authority.key().as_ref(), project.key().as_ref(), &[args.milestone_type as u8]],
+        seeds= [MILESTONE_SEED, project.project_authority.key().as_ref(), project.key().as_ref(), &[milestone_type as u8]],
         payer = milestone_authority,
         bump
     )]
@@ -57,18 +51,19 @@ pub struct CreateMilestone<'info> {
     )]
     pub user: Account<'info, User>,
 
-    // TUKTUK
+    // tuktuk
     #[account(mut)]
-    /// CHECK: Don't need to parse this account, just using it in CPI
+    /// CHECK: no need to parse, just using it in CPI
     pub task_queue: UncheckedAccount<'info>,
 
-    /// CHECK: Don't need to parse this account, just using it in CPI
+    /// CHECK: no need to parse, just using it in CPI
     pub task_queue_authority: UncheckedAccount<'info>,
 
-    /// CHECK: Initialized in CPI
+    /// CHECK: initialized in CPI
     #[account(mut)]
     pub task: UncheckedAccount<'info>,
-    /// CHECK: Via seeds
+
+    /// CHECK: via seeds
     #[account(
         mut,
         seeds = [b"queue_authority"],
@@ -83,7 +78,7 @@ pub struct CreateMilestone<'info> {
 impl<'info> CreateMilestone<'info> {
     pub fn create_milestone(
         &mut self,
-        args: CreateMilestoneArgs,
+        milestone_type: MilestoneType,
         task_id: u16,
         bumps: CreateMilestoneBumps,
     ) -> Result<()> {
@@ -93,30 +88,35 @@ impl<'info> CreateMilestone<'info> {
         let deadline = current_time.checked_add(60).unwrap();
 
         require!(
-            deadline <= self.project.project_deadline,
+            self.project.project_state == ProjectState::Development,
+            Error::ProjectNotDeveloping
+        );
+
+        require!(
+            deadline <= self.project.delivery_deadline,
             Error::NotEnoughTimeLeft
         );
+
         require!(
-            self.project.milestones_posted < self.project.milestone_count,
+            self.project.milestones_posted < 4,
             Error::InvalidMilestoneCount
         );
 
         self.milestone.set_inner(Milestone {
             project_id: self.project.key(),
-            milestone_claim: args.milestone_claim,
             attempt_number: 1,
             milestone_status: MilestoneState::Voting,
-            milestone_type: args.milestone_type,
+            milestone_type: milestone_type,
             votes_casted: 0,
-            amount_voted: 0,
+            capital_casted: 0,
             voting_end_time: deadline,
             vote_against_weight: 0,
             vote_for_weight: 0,
             bump: bumps.milestone,
         });
 
+        self.project.milestones_posted = self.project.milestones_posted.saturating_add(1);
         self.user.last_active_time = clock.unix_timestamp;
-        self.user.milestones_posted = self.user.milestones_posted.checked_add(1).unwrap();
 
         let (compiled_tx, _) = compile_transaction(
             vec![Instruction {
@@ -124,7 +124,7 @@ impl<'info> CreateMilestone<'info> {
                 accounts: crate::__client_accounts_approve_milestone::ApproveMilestone {
                     project: self.project.key(),
                     milestone: self.milestone.key(),
-                    creator_user: self.user.key(),
+                    user: self.user.key(),
                     vault: self.vault.key(),
                     project_authority: self.milestone_authority.key(),
                     system_program: self.system_program.key(),

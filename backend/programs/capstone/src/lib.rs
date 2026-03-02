@@ -5,11 +5,13 @@ mod state;
 mod errors;
 
 use instructions::*;
+use crate::state::MilestoneType;
 
 declare_id!("9Vu2YMd9xHg8JgYe3mTePkDfrefJRjXVV7M2mx6gMZpQ");
 
 #[program]
 pub mod capstone {
+
     use super::*;
 
     pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
@@ -18,7 +20,7 @@ pub mod capstone {
     }
 
     pub fn initialize_user(ctx: Context<InitializeUser>) -> Result<()> {
-        ctx.accounts.init_user(ctx.bumps)?;
+        ctx.accounts.initialize_user(ctx.bumps)?;
         Ok(())
     }
     
@@ -27,8 +29,8 @@ pub mod capstone {
         Ok(())
     }
 
-    pub fn create_milestone(ctx: Context<CreateMilestone>, args: CreateMilestoneArgs, task_id: u16) -> Result<()> {
-        ctx.accounts.create_milestone(args, task_id, ctx.bumps)?;
+    pub fn create_milestone(ctx: Context<CreateMilestone>, milestone_type: MilestoneType, task_id: u16) -> Result<()> {
+        ctx.accounts.create_milestone(milestone_type,task_id, ctx.bumps)?;
         Ok(())
     }
 
@@ -37,8 +39,8 @@ pub mod capstone {
         Ok(())
     }
 
-    pub fn vote_on_milestone(ctx: Context<VoteMilestone>, approve: bool) -> Result<()> {
-        ctx.accounts.vote_milestone(approve, ctx.bumps)?;
+    pub fn vote_on_milestone(ctx: Context<VoteOnMilestone>, approve: bool) -> Result<()> {
+        ctx.accounts.vote_on_milestone(approve, ctx.bumps)?;
         Ok(())
     }
     pub fn approve_milestone(ctx: Context<ApproveMilestone>) -> Result<()> {

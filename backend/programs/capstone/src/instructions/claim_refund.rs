@@ -36,36 +36,39 @@ pub struct ClaimRefund<'info> {
 
 impl<'info> ClaimRefund<'info> {
     pub fn claim_refund(&mut self) -> Result<()> {
+
         require!(
             self.project.project_state == ProjectState::Failed,
             Error::ProjectNotFailed 
         );
+
         require!(
             self.contribution.amount > 0,
             Error::NoContribution
         );
+
         require!(
             !self.contribution.refunded,
             Error::AlreadyRefunded
         );
 
-        let remaining_vault_funds = self.project.collected_amount.saturating_sub(self.project.withdrawn_amount);
+        let remaining_funds = self.project.collected_amount.saturating_sub(self.project.withdrawn_amount);
         
-        let refund_amount = (self.contribution.amount as u128)
-            .checked_mul(remaining_vault_funds as u128)
+        let refund_amount = (self.contribution.amount)
+            .checked_mul(remaining_funds)
             .ok_or(Error::Overflow)?
-            .checked_div(self.project.collected_amount as u128)
-            .ok_or(Error::Overflow)? as u64;
-
-        self.contribution.refunded = true;
+            .checked_div(self.project.collected_amount)
+            .ok_or(Error::Overflow)?;
 
         **self.vault.to_account_info().lamports.borrow_mut() = self.vault.to_account_info().lamports()
-            .checked_sub(refund_amount)
-            .ok_or(Error::ZeroFund)?; 
-            
+        .checked_sub(refund_amount)
+        .ok_or(Error::Overflow)?; 
+    
         **self.funder.to_account_info().lamports.borrow_mut() = self.funder.to_account_info().lamports()
-            .checked_add(refund_amount)
-            .ok_or(Error::Overflow)?;
+        .checked_add(refund_amount)
+        .ok_or(Error::Overflow)?;
+
+        self.contribution.refunded = true;
 
         Ok(())
     }

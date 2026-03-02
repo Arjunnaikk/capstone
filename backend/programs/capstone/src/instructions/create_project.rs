@@ -7,9 +7,9 @@ use anchor_lang::prelude::*;
 #[derive(Clone, Debug, AnchorDeserialize, AnchorSerialize)]
 pub struct CreateProjectArgs {
     pub project_name: String,
-    pub milestone_count: u8,
     pub target_amount: u64,
-    pub deadline: i64,
+    pub funding_deadline: i64,
+    pub delivery_deadline: i64,
 }
 
 #[derive(Accounts)]
@@ -46,12 +46,8 @@ impl<'info> CreateProject<'info> {
         let clock = Clock::get()?;
         require!(args.target_amount > 0, Error::ZeroAmount);
 
-        require!(args.deadline > clock.unix_timestamp, Error::InvalidDeadline);
-
-        require!(
-            args.milestone_count <= 5 && args.milestone_count > 0,
-            Error::InvalidMilestoneCount
-        );
+        require!(args.funding_deadline > clock.unix_timestamp, Error::InvalidDeadline);
+        require!(args.delivery_deadline > clock.unix_timestamp, Error::InvalidDeadline);
 
         self.project.set_inner(Project {
             project_authority: self.project_authority.key(),
@@ -61,9 +57,9 @@ impl<'info> CreateProject<'info> {
             withdrawn_amount: 0,
             project_state: ProjectState::Funding,
             milestones_posted: 0,
-            milestone_count: args.milestone_count,
             milestones_completed: 0,
-            project_deadline: args.deadline,
+            funding_deadline: args.funding_deadline,
+            delivery_deadline: args.delivery_deadline,
             funder_count: 0,
             bump: bumps.project,
         });

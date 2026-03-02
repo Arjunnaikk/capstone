@@ -19,14 +19,13 @@ pub struct InitializeUser<'info> {
 }
 
 impl<'info> InitializeUser<'info> {
-    pub fn init_user(&mut self, bumps: InitializeUserBumps) -> Result<()> {
+    pub fn initialize_user(&mut self, bumps: InitializeUserBumps) -> Result<()> {
         self.user_account.set_inner(User {
-            donated_amount: 0,
-            total_votes: 0,
+            contributed_amount: 0,
+            votes_casted: 0,
             projects_posted: 0,
-            milestones_posted: 0, 
-            milestones_cleared: 0,
-            projects_succeed: 0,
+            milestones_succeeded: 0,
+            projects_succeeded: 0,
             time_joined: Clock::get().unwrap().unix_timestamp,
             last_active_time: Clock::get().unwrap().unix_timestamp,
             bump: bumps.user_account,

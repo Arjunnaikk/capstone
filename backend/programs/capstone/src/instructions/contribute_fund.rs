@@ -44,16 +44,17 @@ pub struct ContributeFund<'info> {
 
 impl<'info> ContributeFund<'info> {
     pub fn contribute_fund(&mut self, amount: u64, bumps: ContributeFundBumps) -> Result<()> {
+        let clock = Clock::get()?;
+
         require!(amount > 0, Error::ZeroAmount);
 
         require!(
             self.project.project_state == ProjectState::Funding,
             Error::ProjectNotFunding
         );
-
-        let clock = Clock::get()?;
+        
         require!(
-            clock.unix_timestamp <= self.project.project_deadline,
+            clock.unix_timestamp <= self.project.funding_deadline,
             Error::ProjectNotFunding
         );
 
@@ -68,7 +69,7 @@ impl<'info> ContributeFund<'info> {
             amount,
         )?;
 
-        let is_new_contributor = self.contribution.amount == 0;
+    let is_new_contributor = self.contribution.amount == 0;
 
         if is_new_contributor {
             self.contribution.funder = self.funder.key();
@@ -76,35 +77,17 @@ impl<'info> ContributeFund<'info> {
             self.contribution.refunded = false;
             self.contribution.bump = bumps.contribution;
 
-            self.project.funder_count = self
-                .project
-                .funder_count
-                .checked_add(1)
-                .ok_or(Error::Overflow)?;
+            self.project.funder_count = self.project.funder_count.checked_add(1).ok_or(Error::Overflow)?;
         }
 
-        self.contribution.amount = self
-            .contribution
-            .amount
-            .checked_add(amount)
-            .ok_or(Error::Overflow)?;
-
-        self.project.collected_amount = self
-            .project
-            .collected_amount
-            .checked_add(amount)
-            .ok_or(Error::Overflow)?;
+        self.contribution.amount = self.contribution.amount.checked_add(amount).ok_or(Error::Overflow)?;
+        self.project.collected_amount = self.project.collected_amount.checked_add(amount).ok_or(Error::Overflow)?;
 
         if self.project.collected_amount >= self.project.target_amount {
             self.project.project_state = ProjectState::Development;
         }
 
-        self.user.donated_amount = self
-            .user
-            .donated_amount
-            .checked_add(amount)
-            .ok_or(Error::Overflow)?;
-
+        self.user.contributed_amount = self.user.contributed_amount.checked_add(amount).ok_or(Error::Overflow)?;
         self.user.last_active_time = clock.unix_timestamp;
 
         Ok(())

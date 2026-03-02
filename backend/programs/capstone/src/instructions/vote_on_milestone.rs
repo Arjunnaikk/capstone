@@ -19,7 +19,7 @@ pub fn integer_sqrt(n: u64) -> u64 {
 }
 
 #[derive(Accounts)]
-pub struct VoteMilestone<'info> {
+pub struct VoteOnMilestone<'info> {
     #[account(mut)]
     pub voter: Signer<'info>,
 
@@ -64,8 +64,8 @@ pub struct VoteMilestone<'info> {
     pub system_program: Program<'info, System>,
 }
 
-impl<'info> VoteMilestone<'info> {
-    pub fn vote_milestone(&mut self, decision: bool, bumps: VoteMilestoneBumps) -> Result<()> {
+impl<'info> VoteOnMilestone<'info> {
+    pub fn vote_on_milestone(&mut self, decision: bool, bumps: VoteOnMilestoneBumps) -> Result<()> {
         let clock = Clock::get()?;
         let current_time = clock.unix_timestamp;
 
@@ -84,28 +84,13 @@ impl<'info> VoteMilestone<'info> {
         );
 
         require!(
-            current_time <= self.project.project_deadline,
-            Error::NotEnoughTimeLeft
-        );
-
-        require!(
             current_time <= self.milestone.voting_end_time,
             Error::NotEnoughTimeLeft
         );
 
-        let tokens = self.contribution.amount;
-        require!(tokens > 0, Error::ZeroAmount);
+        let failed_projects = self.user.projects_posted.saturating_sub(self.user.projects_succeeded);
 
-        let failed_projects = self
-            .user
-            .projects_posted
-            .saturating_sub(self.user.projects_succeed);
-
-        let raw_score = self
-            .user
-            .total_votes
-            .saturating_add(self.user.milestones_cleared.saturating_mul(5))
-            .saturating_add(self.user.projects_succeed.saturating_mul(20));
+        let raw_score = self.user.votes_casted.saturating_add(self.user.milestones_succeeded.saturating_mul(5)).saturating_add(self.user.projects_succeeded.saturating_mul(20));
 
         let penalty = failed_projects.saturating_mul(10);
         let adjusted_score = raw_score.saturating_sub(penalty);
@@ -121,59 +106,47 @@ impl<'info> VoteMilestone<'info> {
 
         let seconds_since_active = current_time
             .checked_sub(self.user.last_active_time)
-            .unwrap_or(0);
+            .ok_or(Error::Overflow)?;
 
         let days_inactive = (seconds_since_active / 86_400) as u64;
 
         let decayed_rep = HALF_LIFE
             .saturating_mul(reputation)
             .checked_div(HALF_LIFE.saturating_add(days_inactive))
-            .unwrap_or(1);
+            .ok_or(Error::Overflow)?;
 
         reputation = decayed_rep.max(1);
 
-        let base_power = integer_sqrt(tokens);
+        let base_power = integer_sqrt(self.contribution.amount);
 
-        let weight_u128 = (base_power as u128)
-            .checked_mul(reputation as u128)
+        let weight = (base_power )
+            .checked_mul(reputation)
             .ok_or(Error::Overflow)?;
 
-        require!(weight_u128 <= u64::MAX as u128, Error::Overflow);
 
-        let mut final_voting_weight = weight_u128 as u64;
+        let mut final_weight = weight;
 
-        final_voting_weight = final_voting_weight.min(MAX_WEIGHT);
+        final_weight = final_weight.min(MAX_WEIGHT);
 
         self.vote.set_inner(Vote {
             voter: self.voter.key(),
             project_id: self.project.key(),
             milestone_id: self.milestone.key(),
             decision,
-            weight: final_voting_weight,
+            weight: final_weight,
             attempt_count: self.milestone.attempt_number,
             bump: bumps.vote,
         });
 
         if decision {
-            self.milestone.vote_for_weight = self
-                .milestone
-                .vote_for_weight
-                .saturating_add(final_voting_weight);
+            self.milestone.vote_for_weight = self.milestone.vote_for_weight.saturating_add(final_weight);
         } else {
-            self.milestone.vote_against_weight = self
-                .milestone
-                .vote_against_weight
-                .saturating_add(final_voting_weight);
+            self.milestone.vote_against_weight = self.milestone.vote_against_weight.saturating_add(final_weight);
         }
 
         self.milestone.votes_casted = self.milestone.votes_casted.saturating_add(1);
-        self.milestone.amount_voted = self
-            .milestone
-            .amount_voted
-            .saturating_add(self.contribution.amount);
-
-        self.user.total_votes = self.user.total_votes.saturating_add(1);
-
+        self.milestone.capital_casted = self.milestone.capital_casted.saturating_add(self.contribution.amount);
+        self.user.votes_casted = self.user.votes_casted.saturating_add(1);
         self.user.last_active_time = current_time;
 
         Ok(())

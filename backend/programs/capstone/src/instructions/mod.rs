@@ -19,8 +19,8 @@ pub use approve_milestone::*;
 pub mod retry_milestone;
 pub use retry_milestone::*; 
 
-pub mod init_user;
-pub use init_user::*;
+pub mod initialize_user;
+pub use initialize_user::*;
 
 pub mod claim_refund;
 pub use claim_refund::*;

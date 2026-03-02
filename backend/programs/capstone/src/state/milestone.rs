@@ -6,12 +6,11 @@ pub const MILESTONE_SEED: &[u8] = b"MILESTONE";
 #[derive(InitSpace, Debug)]
 pub struct Milestone{
     pub project_id: Pubkey,
-    pub milestone_claim: u16,
     pub attempt_number: u8,
     pub milestone_status: MilestoneState,
     pub milestone_type: MilestoneType,
     pub votes_casted: u32,
-    pub amount_voted: u64,
+    pub capital_casted: u64,
     pub voting_end_time: i64,
     pub vote_against_weight: u64, 
     pub vote_for_weight: u64, 
@@ -31,6 +30,5 @@ pub enum MilestoneType{
     Design,
     Development,
     Testing, 
-    Delivery,
-    Upfront
+    Deployment,
 }

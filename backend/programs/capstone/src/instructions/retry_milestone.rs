@@ -13,9 +13,6 @@ use tuktuk_program::{
     TransactionSourceV0,
 };
 
-const VOTING_WINDOW_SECONDS: i64 = 60; 
-const MAX_ATTEMPTS: u8 = 3;
-
 #[derive(Accounts)]
 pub struct RetryMilestone<'info> {
     #[account(mut)]
@@ -50,18 +47,19 @@ pub struct RetryMilestone<'info> {
     )]
     pub vault: Account<'info, Vault>,
 
+    //tuktuk
     #[account(mut)]
-    /// CHECK: Don't need to parse this account, just using it in CPI
+    /// CHECK: no need to parse, just using it in CPI
     pub task_queue: UncheckedAccount<'info>,
 
-    /// CHECK: Don't need to parse this account, just using it in CPI
+    /// CHECK: no need to parse, just using it in CPI
     pub task_queue_authority: UncheckedAccount<'info>,
 
-    /// CHECK: Initialized in CPI
+    /// CHECK: initialized in CPI
     #[account(mut)]
     pub task: UncheckedAccount<'info>,
 
-    /// CHECK: Via seeds
+    /// CHECK: via seeds
     #[account(
         mut,
         seeds = [b"queue_authority"],
@@ -70,7 +68,6 @@ pub struct RetryMilestone<'info> {
     pub queue_authority: AccountInfo<'info>,
 
     pub system_program: Program<'info, System>,
-
     pub tuktuk_program: Program<'info, Tuktuk>,
 }
 
@@ -90,21 +87,21 @@ impl<'info> RetryMilestone<'info> {
         );
 
         require!(
-            self.milestone.attempt_number <= MAX_ATTEMPTS,
+            self.milestone.attempt_number < 3,
             Error::MaxAttemptsReached
         );
 
-        let new_voting_deadline = current_time.saturating_add(VOTING_WINDOW_SECONDS);
+        let new_voting_deadline = current_time.saturating_add(60);
 
         require!(
-            new_voting_deadline <= self.project.project_deadline,
+            new_voting_deadline <= self.project.delivery_deadline,
             Error::NotEnoughTimeLeft
         );
 
         self.milestone.vote_for_weight = 0;
         self.milestone.vote_against_weight = 0;
         self.milestone.votes_casted = 0;
-        self.milestone.amount_voted = 0;
+        self.milestone.capital_casted = 0;
         self.milestone.attempt_number = self.milestone.attempt_number.saturating_add(1);
         self.milestone.milestone_status = MilestoneState::Voting;
 
@@ -116,7 +113,7 @@ impl<'info> RetryMilestone<'info> {
                 accounts: crate::__client_accounts_approve_milestone::ApproveMilestone {
                     project: self.project.key(),
                     milestone: self.milestone.key(),
-                    creator_user: self.user.key(),
+                    user: self.user.key(),
                     vault: self.vault.key(),
                     project_authority: self.milestone_authority.key(),
                     system_program: self.system_program.key(),

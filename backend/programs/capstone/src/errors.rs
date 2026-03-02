@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 
 #[error_code]
 pub enum Error {
-    #[msg("Amount cannot be zero")]
+    #[msg("Amount cannot be zero.")]
     ZeroAmount,
     
     #[msg("Project is invalid")]
@@ -11,48 +11,48 @@ pub enum Error {
     #[msg("Invalid milestone type provided.")]
     InvalidMilestoneType,
 
-    #[msg("Fund amount cannot be zero.")]
-    ZeroFund,
-
-    #[msg("Project is not accepting funds")]
+    #[msg("Project is not in funding stage anymore.")]
     ProjectNotFunding,
 
-    #[msg("Project funding deadline has passed")]
+    #[msg("Project is not in developing stage rightnow.")]
+    ProjectNotDeveloping,
+
+    #[msg("Project funding deadline is execeeded.")]
     ProjectExpired,
 
-    #[msg("Numerical overflow")]
+    #[msg("Numerical overflow.")]
     Overflow,
 
-    #[msg("Numerical overflow")]
+    #[msg("Milestone is not in voting stage.")]
     NotVotingStage,
 
     #[msg("Project not in failed state")]
     ProjectNotFailed,
 
-    #[msg("No contribution found")]
+    #[msg("No contribution found for the given user.")]
     NoContribution,
 
-    #[msg("Refund already claimed")]
+    #[msg("Refund already claimed by the user.")]
     AlreadyRefunded,
 
-    #[msg("Insufficient funds in vault")]
+    #[msg("Insufficient funds in vault.")]
     InsufficientFunds,
 
-    #[msg("You can only retry a milestone that has been disapproved.")]
+    #[msg("You can only retry a milestone in Disapprove stage.")]
     NotDisapproved,
 
-    #[msg("You have reached the maximum number of attempts for this milestone.")]
+    #[msg("Maximum number of attempts for the milestone have been reached.")]
     MaxAttemptsReached,
 
-    #[msg("There is not enough time left before the overall project deadline to conduct a full vote.")]
+    #[msg("There is not enough time left to conduct a full vote.")]
     NotEnoughTimeLeft,
 
     #[msg("Invalid milestone count.")]
     InvalidMilestoneCount,
     
-    #[msg("Vote has already been casted")]
+    #[msg("Vote has been already casted.")]
     AlreadyVoted,
 
-    #[msg("Given deadline is invalid")]
+    #[msg("Given deadline is invalid.")]
     InvalidDeadline
 }
