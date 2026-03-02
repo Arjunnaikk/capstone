@@ -88,6 +88,11 @@ impl<'info> CreateProject<'info> {
             Error::InvalidDeadline
         );
 
+        require!(
+            args.delivery_deadline > args.funding_deadline,
+            Error::InvalidDeadline
+        );
+
         self.project.set_inner(Project {
             project_authority: self.project_authority.key(),
             project_name: args.project_name,
@@ -123,7 +128,7 @@ impl<'info> CreateProject<'info> {
             vec![],
         )
         .unwrap();
-    
+
         queue_task_v0(
             CpiContext::new_with_signer(
                 self.tuktuk_program.to_account_info(),

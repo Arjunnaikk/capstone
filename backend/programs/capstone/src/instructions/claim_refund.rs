@@ -61,11 +61,11 @@ impl<'info> ClaimRefund<'info> {
 
         let remaining_funds = self.project.collected_amount.saturating_sub(self.project.withdrawn_amount);
         
-        let refund_amount = (self.contribution.amount)
-            .checked_mul(remaining_funds)
-            .ok_or(Error::Overflow)?
-            .checked_div(self.project.collected_amount)
-            .ok_or(Error::Overflow)?;
+        let refund_amount = (self.contribution.amount as u128)
+        .checked_mul(remaining_funds as u128)
+        .ok_or(Error::Overflow)?
+        .checked_div(self.project.collected_amount as u128)
+        .ok_or(Error::Overflow)? as u64;
 
         **self.vault.to_account_info().lamports.borrow_mut() = self.vault.to_account_info().lamports()
         .checked_sub(refund_amount)

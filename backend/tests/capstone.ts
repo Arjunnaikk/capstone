@@ -106,6 +106,8 @@ describe("capstone", () => {
 
   console.log("queueAuthority: ", queueAuthority);
 
+  
+
   before(async () => {
     // await loadMoney();
 
@@ -252,7 +254,7 @@ describe("capstone", () => {
 
     const userAccount = await program.account.user.fetch(userPda);
 
-    assert.strictEqual(userAccount.donatedAmount.toNumber(), 0, "donated amount is not correct");
+    assert.strictEqual(userAccount.contributedAmount.toNumber(), 0, "donated amount is not correct");
     assert.strictEqual(userAccount.projectsPosted.toNumber(), 0, "projects posted are not correct");
     assert.strictEqual(userAccount.bump, userBump, "bump is not correct");
     assert.isAtLeast(userAccount.timeJoined.toNumber(), beforeTs, "joining time is not correct");
@@ -311,24 +313,30 @@ describe("capstone", () => {
   });
 
   xit("Creates a project successfully", async () => {
-    const milestoneCount = 3;
     const targetAmount = new anchor.BN(0.003 * anchor.web3.LAMPORTS_PER_SOL);
-    const deadline = new anchor.BN(Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60);
-
+    const funding_deadline = new anchor.BN(Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60);
+    const delivery_deadline = new anchor.BN(Math.floor(Date.now() / 1000) + 14 * 24 * 60 * 60);
+    let taskID = getRandomId(); 
     const beforeUser = await program.account.user.fetch(userPda);
+    let tuktukProgram = await init(provider);
 
     await program.methods
       .createProject({
         projectName: projectName1,
-        milestoneCount: milestoneCount,
         targetAmount: targetAmount,
-        deadline: deadline
-      })
+        fundingDeadline: funding_deadline,
+        deliveryDeadline: delivery_deadline
+      }, taskID)
       .accountsStrict({
         projectAuthority: user.publicKey,
         project: project1Pda,
         user: userPda,
+        taskQueue: taskQueue,
+        taskQueueAuthority: taskQueueAuthority,
+        task: taskKey(taskQueue, taskID)[0],
+        queueAuthority: queueAuthority,
         systemProgram: SystemProgram.programId,
+        tuktukProgram: tuktukProgram.programId,
       })
       .signers([user])
       .rpc();
@@ -372,7 +380,7 @@ describe("capstone", () => {
     assert.strictEqual(contributionAccount.amount.toString(), amount.toString());
     assert.strictEqual(afterProject.collectedAmount.toString(), beforeProject.collectedAmount.add(amount).toString());
     assert.strictEqual(afterProject.funderCount, beforeProject.funderCount + 1);
-    assert.strictEqual(afterUser.donatedAmount.toString(), beforeUser.donatedAmount.add(amount).toString());
+    assert.strictEqual(afterUser.contributedAmount.toString(), beforeUser.contributedAmount.add(amount).toString());
     assert.strictEqual(afterVaultBalance, beforeVaultBalance + amount.toNumber());
   });
 
@@ -462,13 +470,7 @@ describe("capstone", () => {
     const beforeUser = await program.account.user.fetch(userPda);
 
     await program.methods
-      .createMilestone(
-        {
-          milestoneType,
-          milestoneClaim
-        },
-        taskId
-      )
+      .createMilestone(milestoneType,taskId)
       .accountsStrict({
         milestoneAuthority: user.publicKey,
         milestone: milestonePda,
@@ -499,11 +501,6 @@ describe("capstone", () => {
     );
 
     assert.strictEqual(
-      milestoneAccount.milestoneClaim,
-      milestoneClaim
-    );
-
-    assert.strictEqual(
       milestoneAccount.attemptNumber,
       0
     );
@@ -526,30 +523,33 @@ describe("capstone", () => {
       milestoneAccount.bump,
       milestoneBump
     );
-
-    assert.strictEqual(
-      afterUser.milestonesPosted.toNumber(),
-      beforeUser.milestonesPosted.toNumber() + 1
-    );
   });
 
   it("Full success lifecycle simulation", async () => {
-    const targetAmount = new anchor.BN(0.05 * anchor.web3.LAMPORTS_PER_SOL);
-    const deadline = new anchor.BN(Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60);
+    const targetAmount = new anchor.BN(0.003 * anchor.web3.LAMPORTS_PER_SOL);
+    const funding_deadline = new anchor.BN(Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60);
+    const delivery_deadline = new anchor.BN(Math.floor(Date.now() / 1000) + 14 * 24 * 60 * 60);
+    let tuktukProgram = await init(provider);
+    let taskID = getRandomId();
     const amount = new anchor.BN(0.01 * anchor.web3.LAMPORTS_PER_SOL);
 
     await program.methods
       .createProject({
-        projectName: projectName2,
-        milestoneCount: 4,
+        projectName: projectName1,
         targetAmount: targetAmount,
-        deadline: deadline
-      })
+        fundingDeadline: funding_deadline,
+        deliveryDeadline: delivery_deadline
+      }, taskID)
       .accountsStrict({
         projectAuthority: user.publicKey,
-        project: project2Pda,
+        project: project1Pda,
         user: userPda,
+        taskQueue: taskQueue,
+        taskQueueAuthority: taskQueueAuthority,
+        task: taskKey(taskQueue, taskID)[0],
+        queueAuthority: queueAuthority,
         systemProgram: SystemProgram.programId,
+        tuktukProgram: tuktukProgram.programId,
       })
       .signers([user])
       .rpc();
@@ -633,13 +633,10 @@ describe("capstone", () => {
 
     console.log("Contributor 5 has contributed");
 
-    let tuktukProgram = await init(provider);
-
     // -----------------------
     // 4. Milestone 1
     // -----------------------
     const milestone1Type = { design: {} };
-    const milestone1Claim = 0.01;
     let taskId = getRandomId();
 
     const [milestone1Pda] =
@@ -654,13 +651,7 @@ describe("capstone", () => {
       );
 
     await program.methods
-      .createMilestone(
-        {
-          milestoneType: milestone1Type,
-          milestoneClaim: milestone1Claim
-        },
-        taskId
-      )
+      .createMilestone(milestone1Type,taskId)
       .accountsStrict({
         milestoneAuthority: user.publicKey,
         milestone: milestone1Pda,
@@ -812,7 +803,6 @@ describe("capstone", () => {
     // 5. Milestone 2
     // -----------------------
     const milestone2Type = { development: {} };
-    const milestone2Claim = 0.1;
     taskId = getRandomId();
 
     const [milestone2Pda] =
@@ -827,13 +817,7 @@ describe("capstone", () => {
       );
 
     await program.methods
-      .createMilestone(
-        {
-          milestoneType: milestone2Type,
-          milestoneClaim: milestone2Claim
-        },
-        taskId
-      )
+      .createMilestone(milestone2Type, taskId)
       .accountsStrict({
         milestoneAuthority: user.publicKey,
         milestone: milestone2Pda,
@@ -985,7 +969,6 @@ describe("capstone", () => {
     // 6. Milestone 3
     // -----------------------
     const milestone3Type = { testing: {} };
-    const milestone3Claim = 0.01;
     taskId = getRandomId();
 
     const [milestone3Pda] =
@@ -1000,13 +983,7 @@ describe("capstone", () => {
       );
 
     await program.methods
-      .createMilestone(
-        {
-          milestoneType: milestone3Type,
-          milestoneClaim: milestone3Claim
-        },
-        taskId
-      )
+      .createMilestone(milestone3Type,taskId)
       .accountsStrict({
         milestoneAuthority: user.publicKey,
         milestone: milestone3Pda,
@@ -1158,8 +1135,7 @@ describe("capstone", () => {
     //-----------------------
     // 7. Milestone 4
     // -----------------------
-    const milestone4Type = { delivery: {} };
-    const milestone4Claim = 0.02;
+    const milestone4Type = { deployment: {} };
     taskId = getRandomId();
 
     const [milestone4Pda] =
@@ -1174,13 +1150,7 @@ describe("capstone", () => {
       );
 
     await program.methods
-      .createMilestone(
-        {
-          milestoneType: milestone4Type,
-          milestoneClaim: milestone4Claim
-        },
-        taskId
-      )
+      .createMilestone(milestone4Type, taskId)
       .accountsStrict({
         milestoneAuthority: user.publicKey,
         milestone: milestone4Pda,
@@ -1468,12 +1438,12 @@ describe("capstone", () => {
     );
 
     assert.isAbove(
-      finalCreator.projectsSucceed.toNumber(),
+      finalCreator.projectsSucceeded.toNumber(),
       0,
       "Creator's successful project count should be incremented"
     );
     assert.strictEqual(
-      finalCreator.milestonesCleared.toNumber(),
+      finalCreator.milestonesSucceeded.toNumber(),
       4,
       "Creator's cleared milestone count should reflect all 4 milestones"
     );

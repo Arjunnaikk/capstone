@@ -30,7 +30,7 @@ pub mod capstone {
     }
 
     pub fn create_milestone(ctx: Context<CreateMilestone>, milestone_type: MilestoneType, task_id: u16) -> Result<()> {
-        ctx.accounts.create_milestone(milestone_type,task_id, ctx.bumps)?;
+        ctx.accounts.create_milestone(milestone_type, task_id, ctx.bumps)?;
         Ok(())
     }
 

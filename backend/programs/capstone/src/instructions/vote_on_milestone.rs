@@ -68,7 +68,6 @@ impl<'info> VoteOnMilestone<'info> {
     pub fn vote_on_milestone(&mut self, decision: bool, bumps: VoteOnMilestoneBumps) -> Result<()> {
         let clock = Clock::get()?;
         let current_time = clock.unix_timestamp;
-
         let is_new_vote = self.vote.attempt_count == 0;
 
         if !is_new_vote {
@@ -89,12 +88,10 @@ impl<'info> VoteOnMilestone<'info> {
         );
 
         let failed_projects = self.user.projects_posted.saturating_sub(self.user.projects_succeeded);
-
-        let raw_score = self.user.votes_casted.saturating_add(self.user.milestones_succeeded.saturating_mul(5)).saturating_add(self.user.projects_succeeded.saturating_mul(20));
-
+        let global_sol_contributed = self.user.contributed_amount.checked_div(1_000_000_000).unwrap_or(0);
+        let raw_score = self.user.votes_casted.saturating_add(self.user.milestones_succeeded.saturating_mul(5)).saturating_add(self.user.projects_succeeded.saturating_mul(20)).saturating_add(global_sol_contributed);
         let penalty = failed_projects.saturating_mul(10);
         let adjusted_score = raw_score.saturating_sub(penalty);
-
         let mut reputation = 1u64;
 
         if adjusted_score > 0 {
@@ -117,12 +114,12 @@ impl<'info> VoteOnMilestone<'info> {
 
         reputation = decayed_rep.max(1);
 
-        let base_power = integer_sqrt(self.contribution.amount);
+        let raw_sqrt = integer_sqrt(self.contribution.amount);
+        let base_power = raw_sqrt.checked_div(100).unwrap_or(0);
 
         let weight = (base_power )
             .checked_mul(reputation)
             .ok_or(Error::Overflow)?;
-
 
         let mut final_weight = weight;
 
