@@ -1,8 +1,9 @@
 use crate::{
-    accounts::CancelUnfundedProject, errors::Error, state::{USER_SEED, User, project::*}
+    errors::Error,
+    state::{project::*, User, USER_SEED},
 };
-use anchor_lang::prelude::*;
 use anchor_lang::solana_program::instruction::Instruction;
+use anchor_lang::{prelude::*, InstructionData};
 use tuktuk_program::{
     compile_transaction,
     tuktuk::{
@@ -78,8 +79,14 @@ impl<'info> CreateProject<'info> {
         let clock = Clock::get()?;
         require!(args.target_amount > 0, Error::ZeroAmount);
 
-        require!(args.funding_deadline > clock.unix_timestamp, Error::InvalidDeadline);
-        require!(args.delivery_deadline > clock.unix_timestamp, Error::InvalidDeadline);
+        require!(
+            args.funding_deadline > clock.unix_timestamp,
+            Error::InvalidDeadline
+        );
+        require!(
+            args.delivery_deadline > clock.unix_timestamp,
+            Error::InvalidDeadline
+        );
 
         self.project.set_inner(Project {
             project_authority: self.project_authority.key(),
@@ -96,14 +103,18 @@ impl<'info> CreateProject<'info> {
             bump: bumps.project,
         });
 
-        self.user.projects_posted = self.user.projects_posted.checked_add(1).ok_or(Error::Overflow)?;
+        self.user.projects_posted = self
+            .user
+            .projects_posted
+            .checked_add(1)
+            .ok_or(Error::Overflow)?;
         self.user.last_active_time = clock.unix_timestamp;
 
         let (compiled_tx, _) = compile_transaction(
             vec![Instruction {
                 program_id: crate::ID,
                 accounts: crate::__client_accounts_cancel_unfunded_project::CancelUnfundedProject {
-                project: self.project.key(),
+                    project: self.project.key(),
                 }
                 .to_account_metas(None)
                 .to_vec(),
@@ -112,6 +123,7 @@ impl<'info> CreateProject<'info> {
             vec![],
         )
         .unwrap();
+    
         queue_task_v0(
             CpiContext::new_with_signer(
                 self.tuktuk_program.to_account_info(),
