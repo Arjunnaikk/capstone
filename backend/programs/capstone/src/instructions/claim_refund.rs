@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 use crate::errors::Error;
-use crate::state::{CONTRIBUTION_SEED, Contribution, PROJECT_SEED, Project, ProjectState, VAULT_SEED, Vault};
+use crate::state::{CONTRIBUTION_SEED, Contribution, PROJECT_SEED, Project, ProjectState, USER_SEED, User, VAULT_SEED, Vault};
 
 #[derive(Accounts)]
 pub struct ClaimRefund<'info> {
@@ -21,6 +21,13 @@ pub struct ClaimRefund<'info> {
         bump = project.bump
     )]
     pub project: Account<'info, Project>,
+
+    #[account(
+        mut,
+        seeds = [USER_SEED, funder.key().as_ref()],
+        bump = user.bump
+    )]
+    pub user: Account<'info, User>,
 
     #[account(
         mut,
@@ -69,6 +76,7 @@ impl<'info> ClaimRefund<'info> {
         .ok_or(Error::Overflow)?;
 
         self.contribution.refunded = true;
+        self.user.contributed_amount = self.user.contributed_amount.checked_sub(self.contribution.amount).ok_or(Error::Overflow)?;
 
         Ok(())
     }
