@@ -1,4 +1,4 @@
-# Capstone - Milestone-Based Crowdfunding Protocol
+# GIBMONI - A Milestone-Based Crowdfunding Protocol
 
 A decentralized crowdfunding platform built on Solana that ensures accountability through milestone-based fund releases and community voting mechanisms.
 
