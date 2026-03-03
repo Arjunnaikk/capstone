@@ -7,7 +7,7 @@ mod errors;
 use instructions::*;
 use crate::state::MilestoneType;
 
-declare_id!("77bVwxRauUXCrdLdR5jzcBg9qk9tHGnBWLGopdo2Mp2x");
+declare_id!("AEmny7qcxz7vQHgVXTuRnrpHpAMKRsH3PNxD2fWftr3w");
 
 #[program]
 pub mod capstone {

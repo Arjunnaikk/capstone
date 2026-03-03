@@ -6,13 +6,12 @@ import { assert } from "chai";
 import fs from "fs";
 import { init, taskKey, taskQueueAuthorityKey } from "@helium/tuktuk-sdk";
 
-// --- Custom Logger for Professional Output ---
 const Logger = {
   header: (title: string) => console.log(`\n==================================================\n  ${title.toUpperCase()}\n==================================================`),
-  step: (msg: string) => console.log(`\n  ▶ ${msg}`),
+  step: (msg: string) => console.log(`\n   ${msg}`),
   info: (key: string, value: string | number) => console.log(`    ▪ ${key.padEnd(15)} : ${value}`),
-  success: (msg: string) => console.log(`    ✔ ${msg}`),
-  wait: (msg: string) => console.log(`    ⏳ ${msg}...`),
+  success: (msg: string) => console.log(`     ${msg}`),
+  wait: (msg: string) => console.log(`     ${msg}...`),
   table: (data: any[]) => { console.log(); console.table(data); }
 };
 
@@ -22,15 +21,13 @@ describe("Capstone Crowdfunding & Governance", async () => {
 
   const program = anchor.workspace.capstone as Program<Capstone>;
 
-  // --- Utility Functions ---
   const loadWallet = (path: string): Keypair => Keypair.fromSecretKey(Uint8Array.from(JSON.parse(fs.readFileSync(path, "utf-8"))));
   const getRandomId = (): number => Math.floor(Math.random() * 1000) + 1;
   const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
   const toSol = (lamports: number | anchor.BN): number => (typeof lamports === 'number' ? lamports : lamports.toNumber()) / LAMPORTS_PER_SOL;
 
-  // --- Wallets ---
   const admin = loadWallet("./wallets/admin.json");
-  const user = loadWallet("./wallets/user.json"); // Project Creator
+  const user = loadWallet("./wallets/user.json"); 
   const contributorKeys = [
     loadWallet("./wallets/contributor1.json"),
     loadWallet("./wallets/contributor2.json"),
@@ -39,7 +36,6 @@ describe("Capstone Crowdfunding & Governance", async () => {
     loadWallet("./wallets/contributor5.json")
   ];
 
-  // --- PDA Derivation Helpers ---
   const getVaultPda = () => PublicKey.findProgramAddressSync([Buffer.from("VAULT")], program.programId);
   const getUserPda = (wallet: PublicKey) => PublicKey.findProgramAddressSync([Buffer.from("USER"), wallet.toBuffer()], program.programId);
   const getProjectPda = (name: string, authority: PublicKey) => PublicKey.findProgramAddressSync([Buffer.from("PROJECT"), Buffer.from(name), authority.toBuffer()], program.programId);
@@ -47,7 +43,6 @@ describe("Capstone Crowdfunding & Governance", async () => {
   const getMilestonePda = (authority: PublicKey, project: PublicKey, typeIndex: number) => PublicKey.findProgramAddressSync([Buffer.from("MILESTONE"), authority.toBuffer(), project.toBuffer(), Buffer.from([typeIndex])], program.programId);
   const getVotePda = (milestone: PublicKey, voter: PublicKey) => PublicKey.findProgramAddressSync([Buffer.from("VOTE"), milestone.toBuffer(), voter.toBuffer()], program.programId);
 
-  // --- Global State ---
   const projectName1 = "MyTestProject1";
   const projectName2 = "MyTestProject2";
 
@@ -55,14 +50,13 @@ describe("Capstone Crowdfunding & Governance", async () => {
   let userPda: PublicKey, userBump: number;
   let project1Pda: PublicKey, project2Pda: PublicKey;
 
-  // Tuktuk setup
   let tuktukProgram: any;
   let taskId = getRandomId();
   const taskQueue = new anchor.web3.PublicKey("GnCH4xcCtPTqiHa3z76dPW4DX7toa6qCntNJVtwS5KZc");
   const queueAuthority = PublicKey.findProgramAddressSync([Buffer.from("queue_authority")], program.programId)[0];
   const taskQueueAuthority = taskQueueAuthorityKey(taskQueue, queueAuthority)[0];
+  console.log("queueAuthority: ", queueAuthority);
 
-  // Contributor Context Struct
   interface ContributorContext {
     key: Keypair;
     cPda: PublicKey;
@@ -91,6 +85,56 @@ describe("Capstone Crowdfunding & Governance", async () => {
     }));
   });
 
+  async function executeVotingRound(
+    projectPda: PublicKey,
+    milestonePda: PublicKey,
+    decisions: boolean[],
+    attemptLabel: string,
+    contPdaKey: "contPda1" | "contPda2"
+  ) {
+    Logger.step(attemptLabel);
+
+    for (let i = 0; i < contributors.length; i++) {
+      const votePda = getVotePda(milestonePda, contributors[i].key.publicKey)[0];
+      await program.methods.voteOnMilestone(decisions[i])
+        .accountsStrict({
+          voter: contributors[i].key.publicKey, user: contributors[i].cPda, project: projectPda,
+          milestone: milestonePda, contribution: contributors[i][contPdaKey], vote: votePda,
+          systemProgram: SystemProgram.programId,
+        }).signers([contributors[i].key]).rpc();
+    }
+
+    const votePDAs = contributors.map(c => getVotePda(milestonePda, c.key.publicKey)[0]);
+    const fetches = await Promise.all(votePDAs.map(v => program.account.vote.fetch(v)));
+
+    Logger.table(contributors.map((c, i) => ({
+      Alias: c.name,
+      Decision: fetches[i].decision ? "APPROVE" : "REJECT",
+      Weight: fetches[i].weight.toNumber()
+    })));
+  }
+
+  async function runMilestone(index: number, typeObj: any, decisions: boolean[]) {
+    taskId = getRandomId();
+    const [mPda] = getMilestonePda(user.publicKey, project2Pda, index);
+
+    await program.methods.createMilestone(typeObj, taskId)
+      .accountsStrict({
+        milestoneAuthority: user.publicKey, milestone: mPda, vault: vaultPda, project: project2Pda, user: userPda,
+        taskQueue, taskQueueAuthority, task: taskKey(taskQueue, taskId)[0], queueAuthority,
+        systemProgram: SystemProgram.programId, tuktukProgram: tuktukProgram.programId,
+      }).signers([user]).rpc({ skipPreflight: true });
+
+    const mAcc = await program.account.milestone.fetch(mPda);
+    Logger.step(`Milestone ${index + 1} Created (${Object.keys(mAcc.milestoneType)[0].toUpperCase()})`);
+
+    await executeVotingRound(project2Pda, mPda, decisions, "Executing Community Votes", "contPda2");
+
+    Logger.wait(`Waiting for crank to resolve Milestone ${index + 1}`);
+    await sleep(180 * 1000);
+    return mPda;
+  }
+
   it("Initializes the Platform Vault", async () => {
     await program.methods.initialize()
       .accountsStrict({ admin: admin.publicKey, vault: vaultPda, systemProgram: SystemProgram.programId })
@@ -107,7 +151,6 @@ describe("Capstone Crowdfunding & Governance", async () => {
   it("Initializes Developer and Contributor Profiles", async () => {
     Logger.header("Profile Initialization");
 
-    // Developer
     await program.methods.initializeUser()
       .accountsStrict({ user: user.publicKey, userAccount: userPda, systemProgram: SystemProgram.programId })
       .signers([user]).rpc();
@@ -117,7 +160,6 @@ describe("Capstone Crowdfunding & Governance", async () => {
     Logger.info("PDA", userPda.toBase58());
     Logger.info("Joined", new Date(userAccount.timeJoined.toNumber() * 1000).toLocaleString());
 
-    // Contributors
     for (const c of contributors) {
       await program.methods.initializeUser()
         .accountsStrict({ user: c.key.publicKey, userAccount: c.cPda, systemProgram: SystemProgram.programId })
@@ -180,36 +222,6 @@ describe("Capstone Crowdfunding & Governance", async () => {
     assert.ok(updatedProject.projectState.development !== undefined);
   });
 
-  // --- REUSABLE VOTING HELPER ---
-  async function executeVotingRound(
-    projectPda: PublicKey,
-    milestonePda: PublicKey,
-    decisions: boolean[],
-    attemptLabel: string,
-    contPdaKey: "contPda1" | "contPda2"
-  ) {
-    Logger.step(attemptLabel);
-
-    for (let i = 0; i < contributors.length; i++) {
-      const votePda = getVotePda(milestonePda, contributors[i].key.publicKey)[0];
-      await program.methods.voteOnMilestone(decisions[i])
-        .accountsStrict({
-          voter: contributors[i].key.publicKey, user: contributors[i].cPda, project: projectPda,
-          milestone: milestonePda, contribution: contributors[i][contPdaKey], vote: votePda,
-          systemProgram: SystemProgram.programId,
-        }).signers([contributors[i].key]).rpc();
-    }
-
-    const votePDAs = contributors.map(c => getVotePda(milestonePda, c.key.publicKey)[0]);
-    const fetches = await Promise.all(votePDAs.map(v => program.account.vote.fetch(v)));
-
-    Logger.table(contributors.map((c, i) => ({
-      Alias: c.name,
-      Decision: fetches[i].decision ? "APPROVE" : "REJECT",
-      Weight: fetches[i].weight.toNumber()
-    })));
-  }
-
   it("Simulates Lifecycle of a Failing Project (Project 1)", async () => {
     Logger.header("Failure Lifecycle Simulation");
     taskId = getRandomId();
@@ -224,7 +236,6 @@ describe("Capstone Crowdfunding & Governance", async () => {
 
     Logger.info("Milestone 1 Created", milestone1Pda.toBase58());
 
-    // Fails 3 times (majority votes REJECT: 3 false, 2 true)
     const decisions = [false, false, false, true, true];
     const waitTime = 180 * 1000;
 
@@ -258,6 +269,43 @@ describe("Capstone Crowdfunding & Governance", async () => {
     assert.ok(project1.projectState.failed !== undefined);
   });
 
+  it("Allows contributors to claim refunds for a failed project (Project 1)", async () => {
+    Logger.header("Refund Execution Simulation");
+
+    for (const c of contributors) {
+      const preUser = await program.account.user.fetch(c.cPda);
+      const preContribution = await program.account.contribution.fetch(c.contPda1);
+      const preBalance = await provider.connection.getBalance(c.key.publicKey);
+
+      await program.methods.claimRefund()
+        .accountsStrict({
+          funder: c.key.publicKey,
+          vault: vaultPda,
+          project: project1Pda, 
+          user: c.cPda,
+          contribution: c.contPda1,
+          systemProgram: SystemProgram.programId,
+        })
+        .signers([c.key])
+        .rpc();
+
+      const postUser = await program.account.user.fetch(c.cPda);
+      const postContribution = await program.account.contribution.fetch(c.contPda1);
+      const postBalance = await provider.connection.getBalance(c.key.publicKey);
+
+      Logger.step(`${c.name} Successfully Claimed Refund`);
+      Logger.info("Amount Refunded", `${toSol(preContribution.amount)} SOL`);
+
+      assert.isTrue(postContribution.refunded, "Contribution state should be marked as refunded");
+
+      assert.strictEqual(
+        postUser.contributedAmount.toNumber(),
+        preUser.contributedAmount.toNumber() - preContribution.amount.toNumber(),
+        "User's global contributed amount should decrease"
+      );
+    }
+  });
+
   it("Simulates Lifecycle of a Successful Project (Project 2)", async () => {
     Logger.header("Success Lifecycle Simulation");
 
@@ -266,7 +314,6 @@ describe("Capstone Crowdfunding & Governance", async () => {
     const amount = new anchor.BN(0.01 * LAMPORTS_PER_SOL);
     taskId = getRandomId();
 
-    // 1. Create Project
     await program.methods.createProject({
       projectName: projectName2, targetAmount, fundingDeadline: deadlineOffset(7), deliveryDeadline: deadlineOffset(14)
     }, taskId)
@@ -278,7 +325,6 @@ describe("Capstone Crowdfunding & Governance", async () => {
 
     Logger.step("Project 2 Created");
 
-    // 2. Fund Project
     for (const c of contributors) {
       await program.methods.contributeFund(amount)
         .accountsStrict({
@@ -288,35 +334,11 @@ describe("Capstone Crowdfunding & Governance", async () => {
     }
     Logger.success("Project 2 Fully Funded");
 
-    // 3. Milestone Execution Helper
-    async function runMilestone(index: number, typeObj: any, decisions: boolean[]) {
-      taskId = getRandomId();
-      const [mPda] = getMilestonePda(user.publicKey, project2Pda, index);
-
-      await program.methods.createMilestone(typeObj, taskId)
-        .accountsStrict({
-          milestoneAuthority: user.publicKey, milestone: mPda, vault: vaultPda, project: project2Pda, user: userPda,
-          taskQueue, taskQueueAuthority, task: taskKey(taskQueue, taskId)[0], queueAuthority,
-          systemProgram: SystemProgram.programId, tuktukProgram: tuktukProgram.programId,
-        }).signers([user]).rpc({ skipPreflight: true });
-
-      const mAcc = await program.account.milestone.fetch(mPda);
-      Logger.step(`Milestone ${index + 1} Created (${Object.keys(mAcc.milestoneType)[0].toUpperCase()})`);
-
-      await executeVotingRound(project2Pda, mPda, decisions, "Executing Community Votes", "contPda2");
-
-      Logger.wait(`Waiting for crank to resolve Milestone ${index + 1}`);
-      await sleep(180 * 1000);
-      return mPda;
-    }
-
-    // 4. Run all Milestones
     await runMilestone(0, { design: {} }, [true, true, false, true, false]);
     await runMilestone(1, { development: {} }, [true, true, false, true, false]);
     await runMilestone(2, { testing: {} }, [true, true, false, true, false]);
     const milestone4Pda = await runMilestone(3, { deployment: {} }, [true, true, true, true, true]);
 
-    // 5. Final Assertions
     const finalProject = await program.account.project.fetch(project2Pda);
     const finalMilestone4 = await program.account.milestone.fetch(milestone4Pda);
 
