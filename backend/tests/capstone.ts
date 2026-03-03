@@ -55,7 +55,6 @@ describe("Capstone Crowdfunding & Governance", async () => {
   const taskQueue = new anchor.web3.PublicKey("GnCH4xcCtPTqiHa3z76dPW4DX7toa6qCntNJVtwS5KZc");
   const queueAuthority = PublicKey.findProgramAddressSync([Buffer.from("queue_authority")], program.programId)[0];
   const taskQueueAuthority = taskQueueAuthorityKey(taskQueue, queueAuthority)[0];
-  console.log("queueAuthority: ", queueAuthority);
 
   interface ContributorContext {
     key: Keypair;
