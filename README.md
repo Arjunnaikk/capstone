@@ -155,6 +155,6 @@ ISC
 
 ## Program ID
 
-**Devnet Public Key**: `GjT6mbYqVLYwgixai3XZGxi783VqbWHN6YDbLVbdrZLq`
+**Devnet Public Key**: `AEmny7qcxz7vQHgVXTuRnrpHpAMKRsH3PNxD2fWftr3w`
 
 ---
