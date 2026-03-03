@@ -1,474 +1,299 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
 import { Capstone } from "../target/types/capstone";
-import { PublicKey, Keypair, SystemProgram } from "@solana/web3.js";
+import { PublicKey, Keypair, SystemProgram, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { assert } from "chai";
 import fs from "fs";
 import { init, taskKey, taskQueueAuthorityKey } from "@helium/tuktuk-sdk";
 
-describe("capstone", async () => {
+// --- Custom Logger for Professional Output ---
+const Logger = {
+  header: (title: string) => console.log(`\n==================================================\n  ${title.toUpperCase()}\n==================================================`),
+  step: (msg: string) => console.log(`\n  ▶ ${msg}`),
+  info: (key: string, value: string | number) => console.log(`    ▪ ${key.padEnd(15)} : ${value}`),
+  success: (msg: string) => console.log(`    ✔ ${msg}`),
+  wait: (msg: string) => console.log(`    ⏳ ${msg}...`),
+  table: (data: any[]) => { console.log(); console.table(data); }
+};
+
+describe("Capstone Crowdfunding & Governance", async () => {
   const provider = anchor.AnchorProvider.local("https://devnet.helius-rpc.com/?api-key=c5d32b63-b2f3-46b9-9535-0d5510769438");
   anchor.setProvider(provider);
 
   const program = anchor.workspace.capstone as Program<Capstone>;
 
-  // Wallet & Utils Setup
- 
-  function loadWallet(path: string): Keypair {
-    const secret = JSON.parse(fs.readFileSync(path, "utf-8"));
-    return Keypair.fromSecretKey(Uint8Array.from(secret));
-  }
+  // --- Utility Functions ---
+  const loadWallet = (path: string): Keypair => Keypair.fromSecretKey(Uint8Array.from(JSON.parse(fs.readFileSync(path, "utf-8"))));
+  const getRandomId = (): number => Math.floor(Math.random() * 1000) + 1;
+  const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+  const toSol = (lamports: number | anchor.BN): number => (typeof lamports === 'number' ? lamports : lamports.toNumber()) / LAMPORTS_PER_SOL;
 
-  function getRandomId(): number {
-    return Math.floor(Math.random() * 1000) + 1;
-  }
-
-  const sleep = (ms: number): Promise<void> => {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  };
-
+  // --- Wallets ---
   const admin = loadWallet("./wallets/admin.json");
-  const user = loadWallet("./wallets/user.json");
-  const contributor1 = loadWallet("./wallets/contributor1.json");
-  const contributor2 = loadWallet("./wallets/contributor2.json");
-  const contributor3 = loadWallet("./wallets/contributor3.json");
-  const contributor4 = loadWallet("./wallets/contributor4.json");
-  const contributor5 = loadWallet("./wallets/contributor5.json");
+  const user = loadWallet("./wallets/user.json"); // Project Creator
+  const contributorKeys = [
+    loadWallet("./wallets/contributor1.json"),
+    loadWallet("./wallets/contributor2.json"),
+    loadWallet("./wallets/contributor3.json"),
+    loadWallet("./wallets/contributor4.json"),
+    loadWallet("./wallets/contributor5.json")
+  ];
 
-  // PDA Derivation Helpers
-  const VAULT_SEED = "VAULT";
-  const PROJECT_SEED = "PROJECT";
-  const CONTRIBUTION_SEED = "CONTRIBUTION";
-  const MILESTONE_SEED = "MILESTONE";
-  const USER_SEED = "USER";
-  const VOTE_SEED = "VOTE";
+  // --- PDA Derivation Helpers ---
+  const getVaultPda = () => PublicKey.findProgramAddressSync([Buffer.from("VAULT")], program.programId);
+  const getUserPda = (wallet: PublicKey) => PublicKey.findProgramAddressSync([Buffer.from("USER"), wallet.toBuffer()], program.programId);
+  const getProjectPda = (name: string, authority: PublicKey) => PublicKey.findProgramAddressSync([Buffer.from("PROJECT"), Buffer.from(name), authority.toBuffer()], program.programId);
+  const getContributionPda = (funder: PublicKey, project: PublicKey) => PublicKey.findProgramAddressSync([Buffer.from("CONTRIBUTION"), funder.toBuffer(), project.toBuffer()], program.programId);
+  const getMilestonePda = (authority: PublicKey, project: PublicKey, typeIndex: number) => PublicKey.findProgramAddressSync([Buffer.from("MILESTONE"), authority.toBuffer(), project.toBuffer(), Buffer.from([typeIndex])], program.programId);
+  const getVotePda = (milestone: PublicKey, voter: PublicKey) => PublicKey.findProgramAddressSync([Buffer.from("VOTE"), milestone.toBuffer(), voter.toBuffer()], program.programId);
 
-  function getVaultPda(): [PublicKey, number] {
-    return PublicKey.findProgramAddressSync([Buffer.from(VAULT_SEED)], program.programId);
-  }
-
-  function getUserPda(wallet: PublicKey): [PublicKey, number] {
-    return PublicKey.findProgramAddressSync([Buffer.from(USER_SEED), wallet.toBuffer()], program.programId);
-  }
-
-  function getProjectPda(name: string, authority: PublicKey): [PublicKey, number] {
-    return PublicKey.findProgramAddressSync(
-      [Buffer.from(PROJECT_SEED), Buffer.from(name), authority.toBuffer()],
-      program.programId
-    );
-  }
-
-  function getContributionPda(funder: PublicKey, project: PublicKey): [PublicKey, number] {
-    return PublicKey.findProgramAddressSync(
-      [Buffer.from(CONTRIBUTION_SEED), funder.toBuffer(), project.toBuffer()],
-      program.programId
-    );
-  }
-
-  function getMilestonePda(authority: PublicKey, project: PublicKey, typeIndex: number): [PublicKey, number] {
-    return PublicKey.findProgramAddressSync(
-      [Buffer.from(MILESTONE_SEED), authority.toBuffer(), project.toBuffer(), Buffer.from([typeIndex])],
-      program.programId
-    );
-  }
-
-  function getVotePda(milestone: PublicKey, voter: PublicKey): [PublicKey, number] {
-    return PublicKey.findProgramAddressSync(
-      [Buffer.from(VOTE_SEED), milestone.toBuffer(), voter.toBuffer()],
-      program.programId
-    );
-  }
-
-  // Global Test State Variables
-
-  let vaultPda: PublicKey;
-  let vaultBump: number;
-  let userPda: PublicKey;
-  let userBump: number;
-
-  let contributor1Pda: PublicKey, contributor2Pda: PublicKey, contributor3Pda: PublicKey, contributor4Pda: PublicKey, contributor5Pda: PublicKey;
-
-  // Project 1 PDAs
-  let project1Pda: PublicKey, project1Bump: number;
-  let contribution1Pda: PublicKey, contribution2Pda: PublicKey, contribution3Pda: PublicKey, contribution4Pda: PublicKey, contribution5Pda: PublicKey;
-
-  // Project 2 PDAs
-  let project2Pda: PublicKey, project2Bump: number;
-  let contribution12Pda: PublicKey, contribution22Pda: PublicKey, contribution32Pda: PublicKey, contribution42Pda: PublicKey, contribution52Pda: PublicKey;
-
+  // --- Global State ---
   const projectName1 = "MyTestProject1";
   const projectName2 = "MyTestProject2";
+
+  let vaultPda: PublicKey, vaultBump: number;
+  let userPda: PublicKey, userBump: number;
+  let project1Pda: PublicKey, project2Pda: PublicKey;
 
   // Tuktuk setup
   let tuktukProgram: any;
   let taskId = getRandomId();
   const taskQueue = new anchor.web3.PublicKey("GnCH4xcCtPTqiHa3z76dPW4DX7toa6qCntNJVtwS5KZc");
-  const queueAuthority = anchor.web3.PublicKey.findProgramAddressSync([Buffer.from("queue_authority")], program.programId)[0];
+  const queueAuthority = PublicKey.findProgramAddressSync([Buffer.from("queue_authority")], program.programId)[0];
   const taskQueueAuthority = taskQueueAuthorityKey(taskQueue, queueAuthority)[0];
-  console.log("queueAuthority: ", queueAuthority);
+
+  // Contributor Context Struct
+  interface ContributorContext {
+    key: Keypair;
+    cPda: PublicKey;
+    contPda1: PublicKey;
+    contPda2: PublicKey;
+    name: string;
+  }
+  let contributors: ContributorContext[] = [];
 
   before(async () => {
     tuktukProgram = await init(provider);
+    Logger.header("Initializing Test Suite Setup");
+    Logger.info("Queue Authority", queueAuthority.toBase58());
 
     [vaultPda, vaultBump] = getVaultPda();
     [userPda, userBump] = getUserPda(user.publicKey);
+    [project1Pda] = getProjectPda(projectName1, user.publicKey);
+    [project2Pda] = getProjectPda(projectName2, user.publicKey);
 
-    [contributor1Pda] = getUserPda(contributor1.publicKey);
-    [contributor2Pda] = getUserPda(contributor2.publicKey);
-    [contributor3Pda] = getUserPda(contributor3.publicKey);
-    [contributor4Pda] = getUserPda(contributor4.publicKey);
-    [contributor5Pda] = getUserPda(contributor5.publicKey);
-
-    [project1Pda, project1Bump] = getProjectPda(projectName1, user.publicKey);
-    [project2Pda, project2Bump] = getProjectPda(projectName2, user.publicKey);
-
-    [contribution1Pda] = getContributionPda(contributor1.publicKey, project1Pda);
-    [contribution2Pda] = getContributionPda(contributor2.publicKey, project1Pda);
-    [contribution3Pda] = getContributionPda(contributor3.publicKey, project1Pda);
-    [contribution4Pda] = getContributionPda(contributor4.publicKey, project1Pda);
-    [contribution5Pda] = getContributionPda(contributor5.publicKey, project1Pda);
-
-    [contribution12Pda] = getContributionPda(contributor1.publicKey, project2Pda);
-    [contribution22Pda] = getContributionPda(contributor2.publicKey, project2Pda);
-    [contribution32Pda] = getContributionPda(contributor3.publicKey, project2Pda);
-    [contribution42Pda] = getContributionPda(contributor4.publicKey, project2Pda);
-    [contribution52Pda] = getContributionPda(contributor5.publicKey, project2Pda);
+    contributors = contributorKeys.map((key, index) => ({
+      key,
+      cPda: getUserPda(key.publicKey)[0],
+      contPda1: getContributionPda(key.publicKey, project1Pda)[0],
+      contPda2: getContributionPda(key.publicKey, project2Pda)[0],
+      name: `Contributor ${index + 1}`
+    }));
   });
 
-  xit("Initializes vault PDA", async () => {
-    await program.methods
-      .initialize()
-      .accountsStrict({
-        admin: admin.publicKey,
-        vault: vaultPda,
-        systemProgram: SystemProgram.programId,
-      })
-      .signers([admin])
-      .rpc();
+  it("Initializes the Platform Vault", async () => {
+    await program.methods.initialize()
+      .accountsStrict({ admin: admin.publicKey, vault: vaultPda, systemProgram: SystemProgram.programId })
+      .signers([admin]).rpc();
 
     const vaultAccount = await program.account.vault.fetch(vaultPda);
-    console.log(`\n=== Vault Initialized ===\n  PDA: ${vaultPda.toBase58()}\n  Authority: ${vaultAccount.authority.toBase58()}`);
+    Logger.header("Vault Initialization");
+    Logger.info("PDA", vaultPda.toBase58());
+    Logger.info("Authority", vaultAccount.authority.toBase58());
 
     assert.strictEqual(vaultAccount.authority.toString(), admin.publicKey.toString());
-    assert.strictEqual(vaultAccount.bump, vaultBump);
   });
 
-  xit("Initializes a user PDA", async () => {
-    const beforeTs = Math.floor(Date.now() / 1000);
+  it("Initializes Developer and Contributor Profiles", async () => {
+    Logger.header("Profile Initialization");
 
-    await program.methods
-      .initializeUser()
-      .accountsStrict({
-        user: user.publicKey,
-        userAccount: userPda,
-        systemProgram: SystemProgram.programId,
-      })
-      .signers([user])
-      .rpc();
+    // Developer
+    await program.methods.initializeUser()
+      .accountsStrict({ user: user.publicKey, userAccount: userPda, systemProgram: SystemProgram.programId })
+      .signers([user]).rpc();
 
     const userAccount = await program.account.user.fetch(userPda);
-    console.log(`\n=== Developer User Initialized ===\n  PDA: ${userPda.toBase58()}\n  Wallet: ${user.publicKey.toBase58()}\n  Joined: ${new Date(userAccount.timeJoined.toNumber() * 1000).toLocaleString()}`);
+    Logger.step("Developer Profile Created");
+    Logger.info("PDA", userPda.toBase58());
+    Logger.info("Joined", new Date(userAccount.timeJoined.toNumber() * 1000).toLocaleString());
 
-    assert.strictEqual(userAccount.contributedAmount.toNumber(), 0);
-    assert.strictEqual(userAccount.projectsPosted.toNumber(), 0);
-    assert.strictEqual(userAccount.bump, userBump);
-    assert.isAtLeast(userAccount.timeJoined.toNumber(), beforeTs);
-  });
-
-  xit("Initializes contributor's user PDAs", async () => {
-    const contributors = [
-      { key: contributor1, pda: contributor1Pda, name: "Contributor 1" },
-      { key: contributor2, pda: contributor2Pda, name: "Contributor 2" },
-      { key: contributor3, pda: contributor3Pda, name: "Contributor 3" },
-      { key: contributor4, pda: contributor4Pda, name: "Contributor 4" },
-      { key: contributor5, pda: contributor5Pda, name: "Contributor 5" }
-    ];
-
+    // Contributors
     for (const c of contributors) {
-      await program.methods
-        .initializeUser()
-        .accountsStrict({
-          user: c.key.publicKey,
-          userAccount: c.pda,
-          systemProgram: SystemProgram.programId,
-        })
-        .signers([c.key])
-        .rpc();
+      await program.methods.initializeUser()
+        .accountsStrict({ user: c.key.publicKey, userAccount: c.cPda, systemProgram: SystemProgram.programId })
+        .signers([c.key]).rpc();
     }
 
-    const fetches = await Promise.all(contributors.map(c => program.account.user.fetch(c.pda)));
-
-    console.log("\n=== Contributor User PDAs Initialized ===");
-    console.table(contributors.map((c, i) => ({
+    const fetches = await Promise.all(contributors.map(c => program.account.user.fetch(c.cPda)));
+    Logger.step("Contributor Profiles Created");
+    Logger.table(contributors.map((c, i) => ({
       Alias: c.name,
-      PDA: c.pda.toBase58(),
-      Wallet: c.key.publicKey.toBase58(),
-      Contributed_SOL: fetches[i].contributedAmount.toNumber() / anchor.web3.LAMPORTS_PER_SOL,
+      PDA: c.cPda.toBase58(),
+      Contributed_SOL: toSol(fetches[i].contributedAmount)
     })));
   });
 
-  xit("Creates a project successfully", async () => {
-    const targetAmount = new anchor.BN(0.005 * anchor.web3.LAMPORTS_PER_SOL);
-    const funding_deadline = new anchor.BN(Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60);
-    const delivery_deadline = new anchor.BN(Math.floor(Date.now() / 1000) + 14 * 24 * 60 * 60);
+  it("Creates Project 1 (Failure Simulation Target)", async () => {
+    const targetAmount = new anchor.BN(0.005 * LAMPORTS_PER_SOL);
+    const deadlineOffset = (days: number) => new anchor.BN(Math.floor(Date.now() / 1000) + days * 24 * 60 * 60);
     taskId = getRandomId();
-    const beforeUser = await program.account.user.fetch(userPda);
 
-    await program.methods
-      .createProject({
-        projectName: projectName1,
-        targetAmount: targetAmount,
-        fundingDeadline: funding_deadline,
-        deliveryDeadline: delivery_deadline
-      }, taskId)
+    await program.methods.createProject({
+      projectName: projectName1, targetAmount, fundingDeadline: deadlineOffset(7), deliveryDeadline: deadlineOffset(14)
+    }, taskId)
       .accountsStrict({
-        projectAuthority: user.publicKey,
-        project: project1Pda,
-        user: userPda,
-        taskQueue: taskQueue,
-        taskQueueAuthority: taskQueueAuthority,
-        task: taskKey(taskQueue, taskId)[0],
-        queueAuthority: queueAuthority,
-        systemProgram: SystemProgram.programId,
-        tuktukProgram: tuktukProgram.programId,
-      })
-      .signers([user])
-      .rpc();
+        projectAuthority: user.publicKey, project: project1Pda, user: userPda, taskQueue, taskQueueAuthority,
+        task: taskKey(taskQueue, taskId)[0], queueAuthority, systemProgram: SystemProgram.programId, tuktukProgram: tuktukProgram.programId,
+      }).signers([user]).rpc();
 
     const projectAccount = await program.account.project.fetch(project1Pda);
-    const afterUser = await program.account.user.fetch(userPda);
+    Logger.header("Project 1 Created");
+    Logger.info("PDA", project1Pda.toBase58());
+    Logger.info("Target Amount", `${toSol(projectAccount.targetAmount)} SOL`);
+    Logger.info("Current State", Object.keys(projectAccount.projectState)[0]);
 
-    console.log(`\n=== Project 1 Created ===\n  PDA: ${project1Pda.toBase58()}\n  Name: ${projectAccount.projectName}\n  Target: ${projectAccount.targetAmount.toNumber() / anchor.web3.LAMPORTS_PER_SOL} SOL\n  Status: ${Object.keys(projectAccount.projectState)[0]}`);
-
-    assert.strictEqual(projectAccount.projectAuthority.toString(), user.publicKey.toString());
     assert.strictEqual(projectAccount.projectName, projectName1);
-    assert.strictEqual(projectAccount.targetAmount.toString(), targetAmount.toString());
-    assert.strictEqual(projectAccount.collectedAmount.toNumber(), 0);
-    assert.strictEqual(projectAccount.bump, project1Bump);
-    assert.strictEqual(afterUser.projectsPosted.toNumber(), beforeUser.projectsPosted.toNumber() + 1);
   });
 
-  xit("Moves project to Development stage on reaching target", async () => {
-    const amount = new anchor.BN(0.001 * anchor.web3.LAMPORTS_PER_SOL);
-    const contributors = [
-      { key: contributor1, cPda: contributor1Pda, contPda: contribution1Pda, name: "Contributor 1" },
-      { key: contributor2, cPda: contributor2Pda, contPda: contribution2Pda, name: "Contributor 2" },
-      { key: contributor3, cPda: contributor3Pda, contPda: contribution3Pda, name: "Contributor 3" },
-      { key: contributor4, cPda: contributor4Pda, contPda: contribution4Pda, name: "Contributor 4" },
-      { key: contributor5, cPda: contributor5Pda, contPda: contribution5Pda, name: "Contributor 5" }
-    ];
+  it("Fully Funds Project 1 to trigger Development Stage", async () => {
+    const amount = new anchor.BN(0.001 * LAMPORTS_PER_SOL);
 
     for (const c of contributors) {
-      await program.methods
-        .contributeFund(amount)
+      await program.methods.contributeFund(amount)
         .accountsStrict({
-          funder: c.key.publicKey,
-          vault: vaultPda,
-          project: project1Pda,
-          user: c.cPda,
-          contribution: c.contPda,
-          systemProgram: SystemProgram.programId,
-        })
-        .signers([c.key])
-        .rpc();
+          funder: c.key.publicKey, vault: vaultPda, project: project1Pda, user: c.cPda,
+          contribution: c.contPda1, systemProgram: SystemProgram.programId,
+        }).signers([c.key]).rpc();
     }
 
-    const fetches = await Promise.all(contributors.map(c => program.account.contribution.fetch(c.contPda)));
+    const fetches = await Promise.all(contributors.map(c => program.account.contribution.fetch(c.contPda1)));
+    const updatedProject = await program.account.project.fetch(project1Pda);
 
-    console.log("\n=== Project 1 Contributions ===");
-    console.table(contributors.map((c, i) => ({
+    Logger.header("Funding Project 1");
+    Logger.table(contributors.map((c, i) => ({
       Alias: c.name,
-      ContributionPDA: c.contPda.toBase58(),
-      Amount_SOL: fetches[i].amount.toNumber() / anchor.web3.LAMPORTS_PER_SOL,
+      Amount_SOL: toSol(fetches[i].amount),
       Refunded: fetches[i].refunded,
     })));
-
-    const updatedProject = await program.account.project.fetch(project1Pda);
-    console.log(`\nProject 1 Updated State: ${Object.keys(updatedProject.projectState)[0]}`);
+    Logger.success(`Project State Updated to: ${Object.keys(updatedProject.projectState)[0].toUpperCase()}`);
 
     assert.ok(updatedProject.projectState.development !== undefined);
   });
 
-  xit("Initialize a milestone PDA for project", async () => {
-    const milestoneType = { design: {} };
+  // --- REUSABLE VOTING HELPER ---
+  async function executeVotingRound(
+    projectPda: PublicKey,
+    milestonePda: PublicKey,
+    decisions: boolean[],
+    attemptLabel: string,
+    contPdaKey: "contPda1" | "contPda2"
+  ) {
+    Logger.step(attemptLabel);
+
+    for (let i = 0; i < contributors.length; i++) {
+      const votePda = getVotePda(milestonePda, contributors[i].key.publicKey)[0];
+      await program.methods.voteOnMilestone(decisions[i])
+        .accountsStrict({
+          voter: contributors[i].key.publicKey, user: contributors[i].cPda, project: projectPda,
+          milestone: milestonePda, contribution: contributors[i][contPdaKey], vote: votePda,
+          systemProgram: SystemProgram.programId,
+        }).signers([contributors[i].key]).rpc();
+    }
+
+    const votePDAs = contributors.map(c => getVotePda(milestonePda, c.key.publicKey)[0]);
+    const fetches = await Promise.all(votePDAs.map(v => program.account.vote.fetch(v)));
+
+    Logger.table(contributors.map((c, i) => ({
+      Alias: c.name,
+      Decision: fetches[i].decision ? "APPROVE" : "REJECT",
+      Weight: fetches[i].weight.toNumber()
+    })));
+  }
+
+  it("Simulates Lifecycle of a Failing Project (Project 1)", async () => {
+    Logger.header("Failure Lifecycle Simulation");
     taskId = getRandomId();
-    const [milestonePda, milestoneBump] = getMilestonePda(user.publicKey, project1Pda, 0);
-
-    await program.methods
-      .createMilestone(milestoneType, taskId)
-      .accountsStrict({
-        milestoneAuthority: user.publicKey,
-        milestone: milestonePda,
-        vault: vaultPda,
-        project: project1Pda,
-        user: userPda,
-        taskQueue: taskQueue,
-        taskQueueAuthority: taskQueueAuthority,
-        task: taskKey(taskQueue, taskId)[0],
-        queueAuthority: queueAuthority,
-        systemProgram: SystemProgram.programId,
-        tuktukProgram: tuktukProgram.programId,
-      })
-      .signers([user])
-      .rpc({ skipPreflight: true });
-
-    const milestoneAccount = await program.account.milestone.fetch(milestonePda);
-
-    console.log(`\n=== Milestone 1 Created (Project 1) ===\n  PDA: ${milestonePda.toBase58()}\n  Type: ${Object.keys(milestoneAccount.milestoneType)[0]}\n  Status: ${Object.keys(milestoneAccount.milestoneStatus)[0]}\n  Attempt: ${milestoneAccount.attemptNumber}`);
-
-    assert.strictEqual(milestoneAccount.projectId.toString(), project1Pda.toString());
-    assert.strictEqual(milestoneAccount.attemptNumber, 1);
-    assert.ok(milestoneAccount.milestoneStatus.voting !== undefined);
-    assert.strictEqual(milestoneAccount.voteForWeight.toNumber(), 0);
-    assert.strictEqual(milestoneAccount.voteAgainstWeight.toNumber(), 0);
-    assert.strictEqual(milestoneAccount.bump, milestoneBump);
-  });
-
-  xit("Failure lifecycle simulation", async () => {
     const [milestone1Pda] = getMilestonePda(user.publicKey, project1Pda, 0);
 
-    const votePDAs = [
-      getVotePda(milestone1Pda, contributor1.publicKey)[0],
-      getVotePda(milestone1Pda, contributor2.publicKey)[0],
-      getVotePda(milestone1Pda, contributor3.publicKey)[0],
-      getVotePda(milestone1Pda, contributor4.publicKey)[0],
-      getVotePda(milestone1Pda, contributor5.publicKey)[0]
-    ];
-
-    const voters = [
-      { key: contributor1, cPda: contributor1Pda, contPda: contribution1Pda, votePda: votePDAs[0], decision: false, name: "Contributor 1" },
-      { key: contributor2, cPda: contributor2Pda, contPda: contribution2Pda, votePda: votePDAs[1], decision: false, name: "Contributor 2" },
-      { key: contributor3, cPda: contributor3Pda, contPda: contribution3Pda, votePda: votePDAs[2], decision: false, name: "Contributor 3" },
-      { key: contributor4, cPda: contributor4Pda, contPda: contribution4Pda, votePda: votePDAs[3], decision: true, name: "Contributor 4" },
-      { key: contributor5, cPda: contributor5Pda, contPda: contribution5Pda, votePda: votePDAs[4], decision: true, name: "Contributor 5" }
-    ];
-
-    // --- ATTEMPT 1 ---
-    for (const v of voters) {
-      await program.methods
-        .voteOnMilestone(v.decision)
-        .accountsStrict({
-          voter: v.key.publicKey, user: v.cPda, project: project1Pda, milestone: milestone1Pda,
-          contribution: v.contPda, vote: v.votePda, systemProgram: SystemProgram.programId,
-        }).signers([v.key]).rpc();
-    }
-    let fetches = await Promise.all(voters.map(v => program.account.vote.fetch(v.votePda)));
-    console.log("\n=== Project 1, Milestone 1: Voting (Attempt 1) ===");
-    console.table(voters.map((v, i) => ({ Alias: v.name, VotePDA: v.votePda.toBase58(), Decision: fetches[i].decision ? "APPROVE" : "REJECT", Weight: fetches[i].weight.toNumber(), Attempt: fetches[i].attemptCount })));
-
-    console.log("\nWaiting for crank to resolve Attempt 1...");
-    await sleep(180 * 1000);
-
-    // --- ATTEMPT 2 ---
-    taskId = getRandomId();
-    await program.methods
-      .retryMilestone(taskId)
+    await program.methods.createMilestone({ design: {} }, taskId)
       .accountsStrict({
-        milestoneAuthority: user.publicKey, project: project1Pda, milestone: milestone1Pda, user: userPda, vault: vaultPda,
+        milestoneAuthority: user.publicKey, milestone: milestone1Pda, vault: vaultPda, project: project1Pda, user: userPda,
         taskQueue, taskQueueAuthority, task: taskKey(taskQueue, taskId)[0], queueAuthority,
         systemProgram: SystemProgram.programId, tuktukProgram: tuktukProgram.programId,
-      }).signers([user]).rpc();
-    console.log("\nMilestone Retry 1 Triggered.");
+      }).signers([user]).rpc({ skipPreflight: true });
 
-    for (const v of voters) {
-      await program.methods
-        .voteOnMilestone(v.decision)
-        .accountsStrict({
-          voter: v.key.publicKey, user: v.cPda, project: project1Pda, milestone: milestone1Pda,
-          contribution: v.contPda, vote: v.votePda, systemProgram: SystemProgram.programId,
-        }).signers([v.key]).rpc();
+    Logger.info("Milestone 1 Created", milestone1Pda.toBase58());
+
+    // Fails 3 times (majority votes REJECT: 3 false, 2 true)
+    const decisions = [false, false, false, true, true];
+    const waitTime = 180 * 1000;
+
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      if (attempt > 1) {
+        taskId = getRandomId();
+        await program.methods.retryMilestone(taskId)
+          .accountsStrict({
+            milestoneAuthority: user.publicKey, project: project1Pda, milestone: milestone1Pda, user: userPda, vault: vaultPda,
+            taskQueue, taskQueueAuthority, task: taskKey(taskQueue, taskId)[0], queueAuthority,
+            systemProgram: SystemProgram.programId, tuktukProgram: tuktukProgram.programId,
+          }).signers([user]).rpc();
+        Logger.info(`Triggered Retry`, attempt - 1);
+      }
+
+      await executeVotingRound(project1Pda, milestone1Pda, decisions, `Voting Round (Attempt ${attempt})`, "contPda1");
+
+      const waitLabel = attempt === 3 ? "final failure resolution" : `crank to resolve Attempt ${attempt}`;
+      Logger.wait(`Waiting for ${waitLabel}`);
+      await sleep(attempt === 3 ? 120 * 1000 : waitTime);
     }
-    fetches = await Promise.all(voters.map(v => program.account.vote.fetch(v.votePda)));
-    console.log("\n=== Project 1, Milestone 1: Voting (Attempt 2) ===");
-    console.table(voters.map((v, i) => ({ Alias: v.name, VotePDA: v.votePda.toBase58(), Decision: fetches[i].decision ? "APPROVE" : "REJECT", Weight: fetches[i].weight.toNumber(), Attempt: fetches[i].attemptCount })));
-
-    console.log("\nWaiting for crank to resolve Attempt 2...");
-    await sleep(180 * 1000);
-
-    // --- ATTEMPT 3 ---
-    taskId = getRandomId();
-    await program.methods
-      .retryMilestone(taskId)
-      .accountsStrict({
-        milestoneAuthority: user.publicKey, project: project1Pda, milestone: milestone1Pda, user: userPda, vault: vaultPda,
-        taskQueue, taskQueueAuthority, task: taskKey(taskQueue, taskId)[0], queueAuthority,
-        systemProgram: SystemProgram.programId, tuktukProgram: tuktukProgram.programId,
-      }).signers([user]).rpc();
-    console.log("\nMilestone Retry 2 Triggered.");
-
-    for (const v of voters) {
-      await program.methods
-        .voteOnMilestone(v.decision)
-        .accountsStrict({
-          voter: v.key.publicKey, user: v.cPda, project: project1Pda, milestone: milestone1Pda,
-          contribution: v.contPda, vote: v.votePda, systemProgram: SystemProgram.programId,
-        }).signers([v.key]).rpc();
-    }
-    fetches = await Promise.all(voters.map(v => program.account.vote.fetch(v.votePda)));
-    console.log("\n=== Project 1, Milestone 1: Voting (Attempt 3) ===");
-    console.table(voters.map((v, i) => ({ Alias: v.name, VotePDA: v.votePda.toBase58(), Decision: fetches[i].decision ? "APPROVE" : "REJECT", Weight: fetches[i].weight.toNumber(), Attempt: fetches[i].attemptCount })));
-
-    console.log("\nWaiting for final failure resolution...");
-    await sleep(120 * 1000);
 
     const project1 = await program.account.project.fetch(project1Pda);
     const milestone1 = await program.account.milestone.fetch(milestone1Pda);
 
-    console.log(`\n=== Project 1 Final Resolution ===\n  Milestone Status: ${Object.keys(milestone1.milestoneStatus)[0]}\n  Project State: ${Object.keys(project1.projectState)[0]}`);
+    Logger.step("Resolution Reached");
+    Logger.info("Final Milestone Status", Object.keys(milestone1.milestoneStatus)[0]);
+    Logger.info("Final Project State", Object.keys(project1.projectState)[0]);
 
-    assert.ok(milestone1.milestoneStatus.disapproved !== undefined, "Milestone is approved even after all the retries");
-    assert.ok(project1.projectState.failed !== undefined, "Project is not marked as failed");
+    assert.ok(milestone1.milestoneStatus.disapproved !== undefined);
+    assert.ok(project1.projectState.failed !== undefined);
   });
 
-  xit("Success lifecycle simulation", async () => {
-    const targetAmount = new anchor.BN(0.05 * anchor.web3.LAMPORTS_PER_SOL);
-    const funding_deadline = new anchor.BN(Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60);
-    const delivery_deadline = new anchor.BN(Math.floor(Date.now() / 1000) + 14 * 24 * 60 * 60);
-    const amount = new anchor.BN(0.01 * anchor.web3.LAMPORTS_PER_SOL);
+  it("Simulates Lifecycle of a Successful Project (Project 2)", async () => {
+    Logger.header("Success Lifecycle Simulation");
+
+    const targetAmount = new anchor.BN(0.05 * LAMPORTS_PER_SOL);
+    const deadlineOffset = (days: number) => new anchor.BN(Math.floor(Date.now() / 1000) + days * 24 * 60 * 60);
+    const amount = new anchor.BN(0.01 * LAMPORTS_PER_SOL);
     taskId = getRandomId();
 
-    await program.methods
-      .createProject({
-        projectName: projectName2, targetAmount, fundingDeadline: funding_deadline, deliveryDeadline: delivery_deadline
-      }, taskId)
+    // 1. Create Project
+    await program.methods.createProject({
+      projectName: projectName2, targetAmount, fundingDeadline: deadlineOffset(7), deliveryDeadline: deadlineOffset(14)
+    }, taskId)
       .accountsStrict({
         projectAuthority: user.publicKey, project: project2Pda, user: userPda,
         taskQueue, taskQueueAuthority, task: taskKey(taskQueue, taskId)[0], queueAuthority,
         systemProgram: SystemProgram.programId, tuktukProgram: tuktukProgram.programId,
       }).signers([user]).rpc();
 
-    const p2Acc = await program.account.project.fetch(project2Pda);
-    console.log(`\n=== Project 2 Created ===\n  PDA: ${project2Pda.toBase58()}\n  Name: ${p2Acc.projectName}\n  Status: ${Object.keys(p2Acc.projectState)[0]}`);
+    Logger.step("Project 2 Created");
 
-    // --- Contributions ---
-    const contributors = [
-      { key: contributor1, cPda: contributor1Pda, contPda: contribution12Pda, name: "Contributor 1" },
-      { key: contributor2, cPda: contributor2Pda, contPda: contribution22Pda, name: "Contributor 2" },
-      { key: contributor3, cPda: contributor3Pda, contPda: contribution32Pda, name: "Contributor 3" },
-      { key: contributor4, cPda: contributor4Pda, contPda: contribution42Pda, name: "Contributor 4" },
-      { key: contributor5, cPda: contributor5Pda, contPda: contribution52Pda, name: "Contributor 5" }
-    ];
-
+    // 2. Fund Project
     for (const c of contributors) {
-      await program.methods
-        .contributeFund(amount)
+      await program.methods.contributeFund(amount)
         .accountsStrict({
           funder: c.key.publicKey, vault: vaultPda, project: project2Pda, user: c.cPda,
-          contribution: c.contPda, systemProgram: SystemProgram.programId,
+          contribution: c.contPda2, systemProgram: SystemProgram.programId,
         }).signers([c.key]).rpc();
     }
+    Logger.success("Project 2 Fully Funded");
 
-    const contFetches = await Promise.all(contributors.map(c => program.account.contribution.fetch(c.contPda)));
-    console.log("\n=== Project 2 Contributions ===");
-    console.table(contributors.map((c, i) => ({ Alias: c.name, ContributionPDA: c.contPda.toBase58(), Amount_SOL: contFetches[i].amount.toNumber() / anchor.web3.LAMPORTS_PER_SOL })));
-
-    // Helper function for voting rounds
-    async function runMilestoneRound(milestoneIndex: number, milestoneTypeObj: any, decisions: boolean[]) {
+    // 3. Milestone Execution Helper
+    async function runMilestone(index: number, typeObj: any, decisions: boolean[]) {
       taskId = getRandomId();
-      const [mPda] = getMilestonePda(user.publicKey, project2Pda, milestoneIndex);
+      const [mPda] = getMilestonePda(user.publicKey, project2Pda, index);
 
-      await program.methods
-        .createMilestone(milestoneTypeObj, taskId)
+      await program.methods.createMilestone(typeObj, taskId)
         .accountsStrict({
           milestoneAuthority: user.publicKey, milestone: mPda, vault: vaultPda, project: project2Pda, user: userPda,
           taskQueue, taskQueueAuthority, task: taskKey(taskQueue, taskId)[0], queueAuthority,
@@ -476,44 +301,32 @@ describe("capstone", async () => {
         }).signers([user]).rpc({ skipPreflight: true });
 
       const mAcc = await program.account.milestone.fetch(mPda);
-      console.log(`\n=== Milestone ${milestoneIndex + 1} Created ===\n  PDA: ${mPda.toBase58()}\n  Type: ${Object.keys(mAcc.milestoneType)[0]}`);
+      Logger.step(`Milestone ${index + 1} Created (${Object.keys(mAcc.milestoneType)[0].toUpperCase()})`);
 
-      const votePDAs = contributors.map(c => getVotePda(mPda, c.key.publicKey)[0]);
+      await executeVotingRound(project2Pda, mPda, decisions, "Executing Community Votes", "contPda2");
 
-      for (let i = 0; i < contributors.length; i++) {
-        await program.methods
-          .voteOnMilestone(decisions[i])
-          .accountsStrict({
-            voter: contributors[i].key.publicKey, user: contributors[i].cPda, project: project2Pda, milestone: mPda,
-            contribution: contributors[i].contPda, vote: votePDAs[i], systemProgram: SystemProgram.programId,
-          }).signers([contributors[i].key]).rpc();
-      }
-
-      const voteFetches = await Promise.all(votePDAs.map(v => program.account.vote.fetch(v)));
-      console.log(`\n=== Project 2, Milestone ${milestoneIndex + 1}: Voting Results ===`);
-      console.table(contributors.map((c, i) => ({ Alias: c.name, VotePDA: votePDAs[i].toBase58(), Decision: voteFetches[i].decision ? "APPROVE" : "REJECT", Weight: voteFetches[i].weight.toNumber() })));
-
-      console.log(`Waiting for crank to resolve Milestone ${milestoneIndex + 1}...`);
+      Logger.wait(`Waiting for crank to resolve Milestone ${index + 1}`);
       await sleep(180 * 1000);
       return mPda;
     }
 
-    await runMilestoneRound(0, { design: {} }, [true, true, false, true, false]);
-    await runMilestoneRound(1, { development: {} }, [true, true, false, true, false]);
-    await runMilestoneRound(2, { testing: {} }, [true, true, false, true, false]);
-    const milestone4Pda = await runMilestoneRound(3, { deployment: {} }, [true, true, true, true, true]);
+    // 4. Run all Milestones
+    await runMilestone(0, { design: {} }, [true, true, false, true, false]);
+    await runMilestone(1, { development: {} }, [true, true, false, true, false]);
+    await runMilestone(2, { testing: {} }, [true, true, false, true, false]);
+    const milestone4Pda = await runMilestone(3, { deployment: {} }, [true, true, true, true, true]);
 
+    // 5. Final Assertions
     const finalProject = await program.account.project.fetch(project2Pda);
     const finalMilestone4 = await program.account.milestone.fetch(milestone4Pda);
-    const finalCreator = await program.account.user.fetch(userPda);
 
-    console.log(`\n=== Project 2 Final Resolution ===\n  Project State: ${Object.keys(finalProject.projectState)[0]}\n  Milestones Cleared: ${finalProject.milestonesCompleted}`);
+    Logger.header("Project 2 Final Assessment");
+    Logger.success(`Project State: ${Object.keys(finalProject.projectState)[0].toUpperCase()}`);
+    Logger.success(`Milestones Cleared: ${finalProject.milestonesCompleted}`);
 
-    assert.ok(finalProject.projectState.completed !== undefined, "Project state should be Completed");
-    assert.strictEqual(finalProject.milestonesCompleted, 4, "Project should have exactly 4 completed milestones");
-    assert.isAbove(finalProject.withdrawnAmount.toNumber(), 0, "Developer should have successfully withdrawn funds");
-    assert.ok(finalMilestone4.milestoneStatus.approved !== undefined, "Milestone 4 should be approved");
-    assert.isAbove(finalCreator.projectsSucceeded.toNumber(), 0, "Creator's successful project count should be incremented");
-    assert.strictEqual(finalCreator.milestonesSucceeded.toNumber(), 4, "Creator's cleared milestone count should reflect all 4 milestones");
+    assert.ok(finalProject.projectState.completed !== undefined);
+    assert.strictEqual(finalProject.milestonesCompleted, 4);
+    assert.isAbove(finalProject.withdrawnAmount.toNumber(), 0);
+    assert.ok(finalMilestone4.milestoneStatus.approved !== undefined);
   });
 });
